@@ -1,0 +1,446 @@
+{
+  "name": "AI Lead Scoring System (Production)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "select",
+        "sheetId": {
+          "__rl": true,
+          "value": "YOUR_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "Lead Database"
+        },
+        "range": "Sheet1!A:H",
+        "options": {
+          "returnAllMatches": "noLimit"
+        }
+      },
+      "id": "fetch-leads",
+      "name": "Fetch New Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "1",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Data Normalization and Preparation\n// This replaces the 'Simulation' node. It ensures required fields exist without overwriting real data.\n\nconst leads = [];\n\nfor (const item of $input.all()) {\n  const lead = item.json;\n  \n  // Normalize data (Use existing data or set safe defaults)\n  const prepared = {\n    ...lead,\n    // Default to 'Unknown' if missing, required for fit score\n    company_size: lead.company_size || 'Unknown',\n    industry: lead.industry || 'Unspecified',\n    \n    // Convert 'true'/'false' strings to booleans if necessary\n    email_verified: lead.email_verified === true || lead.email_verified === 'true',\n    \n    // Ensure website format\n    website: lead.website || (lead.company ? `https://${lead.company.toLowerCase().replace(/\\s+/g, '')}.com` : null),\n    \n    // Add processing timestamp\n    processing_date: new Date().toISOString()\n  };\n  \n  leads.push({ json: prepared });\n}\n\nreturn leads;"
+      },
+      "id": "normalize-data",
+      "name": "Normalize Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-start",
+      "name": "Loop Over Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "requestMethod": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama-3.1-70b-versatile"
+            },
+            {
+              "name": "messages",
+              "value": "={{ [{\"role\": \"system\", \"content\": \"You are a sales intelligence analyst. Analyze leads and provide structured JSON output with buying intent, pain points, and recommendations.\"}, {\"role\": \"user\", \"content\": `Analyze this lead:\\n\\nName: ${$json.name}\\nCompany: ${$json.company}\\nTitle: ${$json.title}\\nEmail: ${$json.email}\\nPhone: ${$json.phone}\\nIndustry: ${$json.industry}\\nCompany Size: ${$json.company_size}\\nCall Transcript: ${$json.call_transcript || 'No transcript available'}\\nEngagement: ${$json.engagement_level || 'Unknown'}\\n\\nProvide analysis in JSON format with:\\n- buying_intent_score (1-10)\\n- urgency_level (low/medium/high)\\n- budget_indicators (boolean)\\n- decision_maker (boolean)\\n- pain_points (array)\\n- objections (array)\\n- sentiment (positive/neutral/negative)\\n- next_best_action (string)\\n- recommended_timing (string)\\n- talking_points (array)`}] }}"
+            },
+            {
+              "name": "temperature",
+              "value": "0.3"
+            },
+            {
+              "name": "response_format",
+              "value": "={{ {\"type\": \"json_object\"} }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "groq-analysis",
+      "name": "Groq AI Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  // Fallback if AI fails to return valid JSON\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.4, // 40%\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3, // 30% (Default to 5 if missing)\n  fit_score: calculateFitScore(lead) * 0.2, // 20%\n  recency: calculateRecencyScore(lead) * 0.1 // 10%\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\n// Helper functions\nfunction calculateFitScore(lead) {\n  let score = 5; // baseline\n  \n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200' || lead.company_size === '200-500') score += 2;\n  if (lead.linkedin_quality && lead.linkedin_quality > 7) score += 1;\n  \n  return Math.min(score, 10);\n}\n\nfunction calculateRecencyScore(lead) {\n  // Real implementation: Check last_contact_date\n  if (!lead.last_contact_date) return 5; // Neutral if unknown\n  \n  const daysSince = (new Date() - new Date(lead.last_contact_date)) / (1000 * 60 * 60 * 24);\n  if (daysSince < 7) return 10;\n  if (daysSince < 30) return 7;\n  return 3;\n}\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    score_breakdown: scores,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "calculate-score",
+      "name": "Calculate Composite Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.composite_score }}",
+                    "rightValue": 8,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "High Intent"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.composite_score }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $json.composite_score }}",
+                    "rightValue": 8,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Medium Intent"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.composite_score }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Low Intent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-action",
+      "name": "Route by Score",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://rest.gohighlevel.com/v1/contacts/{{ $json.ghl_contact_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GHL_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customFields",
+              "value": "={{ {\"intent_score\": $json.composite_score, \"ai_analysis\": JSON.stringify($json.ai_analysis), \"last_analysis\": $json.analysis_timestamp, \"priority\": \"HIGH\"} }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ [\"Hot Lead\", \"AI Scored\", \"Urgent Follow-up\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-ghl-high",
+      "name": "Update GHL (High)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://rest.gohighlevel.com/v1/contacts/{{ $json.ghl_contact_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GHL_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customFields",
+              "value": "={{ {\"intent_score\": $json.composite_score, \"ai_analysis\": JSON.stringify($json.ai_analysis), \"last_analysis\": $json.analysis_timestamp, \"priority\": \"MEDIUM\"} }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ [\"Warm Lead\", \"AI Scored\", \"Nurture\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-ghl-medium",
+      "name": "Update GHL (Medium)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://rest.gohighlevel.com/v1/contacts/{{ $json.ghl_contact_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GHL_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "customFields",
+              "value": "={{ {\"intent_score\": $json.composite_score, \"ai_analysis\": JSON.stringify($json.ai_analysis), \"last_analysis\": $json.analysis_timestamp, \"priority\": \"LOW\"} }}"
+            },
+            {
+              "name": "tags",
+              "value": "={{ [\"Cold Lead\", \"AI Scored\", \"Long-term Drip\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-ghl-low",
+      "name": "Update GHL (Low)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_SLACK_WEBHOOK_URL",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=🔥 *HIGH PRIORITY LEAD*\n\n*{{ $json.name }}* from *{{ $json.company }}*\nScore: {{ $json.composite_score }}/10\n\n*Pain Points:*\n{{ $json.ai_analysis.pain_points.join('\\n• ') }}\n\n*Next Action:* {{ $json.ai_analysis.next_best_action }}\n*Timing:* {{ $json.ai_analysis.recommended_timing }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-high",
+      "name": "Slack Alert (High)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_SLACK_WEBHOOK_URL",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=⚡ *Medium Priority Lead*\n{{ $json.name }} - {{ $json.company }}\nScore: {{ $json.composite_score }}/10\nAction: {{ $json.ai_analysis.next_best_action }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-medium",
+      "name": "Slack Alert (Medium)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {},
+      "id": "merge-results",
+      "name": "Merge All Routes",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate summary report\nconst allLeads = $input.all().map(item => item.json);\n\nconst summary = {\n  total_leads: allLeads.length,\n  high_intent: allLeads.filter(l => l.composite_score >= 8).length,\n  medium_intent: allLeads.filter(l => l.composite_score >= 5 && l.composite_score < 8).length,\n  low_intent: allLeads.filter(l => l.composite_score < 5).length,\n  average_score: allLeads.length > 0 ? (allLeads.reduce((sum, l) => sum + l.composite_score, 0) / allLeads.length).toFixed(2) : 0,\n  top_industries: getTopItems(allLeads, 'industry'),\n  common_pain_points: getTopPainPoints(allLeads),\n  generated_at: new Date().toISOString()\n};\n\nfunction getTopItems(arr, key) {\n  const counts = {};\n  arr.forEach(item => {\n    counts[item[key]] = (counts[item[key]] || 0) + 1;\n  });\n  return Object.entries(counts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 3)\n    .map(([name, count]) => `${name} (${count})`);\n}\n\nfunction getTopPainPoints(leads) {\n  const allPainPoints = leads\n    .flatMap(l => l.ai_analysis?.pain_points || [])\n    .filter(p => p);\n  \n  const counts = {};\n  allPainPoints.forEach(p => {\n    counts[p] = (counts[p] || 0) + 1;\n  });\n  \n  return Object.entries(counts)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, 5)\n    .map(([pain, count]) => `${pain} (${count} leads)`);\n}\n\nreturn [{ json: { summary, detailed_leads: allLeads } }];"
+      },
+      "id": "generate-summary",
+      "name": "Generate Summary Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_SLACK_WEBHOOK_URL",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=📊 *Lead Analysis Summary*\n\n*Total Leads Analyzed:* {{ $json.summary.total_leads }}\n*Average Score:* {{ $json.summary.average_score }}/10\n\n*Distribution:*\n🔥 High Intent: {{ $json.summary.high_intent }}\n⚡ Medium Intent: {{ $json.summary.medium_intent }}\n❄️ Low Intent: {{ $json.summary.low_intent }}\n\n*Top Industries:*\n{{ $json.summary.top_industries.join('\\n') }}\n\n*Common Pain Points:*\n{{ $json.summary.common_pain_points.join('\\n') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "slack-summary",
+      "name": "Send Summary to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2880, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Fetch New Leads", "type": "main", "index": 0 }]]
+    },
+    "Fetch New Leads": {
+      "main": [[{ "node": "Normalize Data", "type": "main", "index": 0 }]]
+    },
+    "Normalize Data": {
+      "main": [[{ "node": "Loop Over Leads", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Leads": {
+      "main": [
+        [{ "node": "Groq AI Analysis", "type": "main", "index": 0 }],
+        [{ "node": "Generate Summary Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Groq AI Analysis": {
+      "main": [[{ "node": "Calculate Composite Score", "type": "main", "index": 0 }]]
+    },
+    "Calculate Composite Score": {
+      "main": [[{ "node": "Route by Score", "type": "main", "index": 0 }]]
+    },
+    "Route by Score": {
+      "main": [
+        [{ "node": "Update GHL (High)", "type": "main", "index": 0 }],
+        [{ "node": "Update GHL (Medium)", "type": "main", "index": 0 }],
+        [{ "node": "Update GHL (Low)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update GHL (High)": {
+      "main": [[{ "node": "Slack Alert (High)", "type": "main", "index": 0 }]]
+    },
+    "Update GHL (Medium)": {
+      "main": [[{ "node": "Slack Alert (Medium)", "type": "main", "index": 0 }]]
+    },
+    "Update GHL (Low)": {
+      "main": [[{ "node": "Merge All Routes", "type": "main", "index": 0 }]]
+    },
+    "Slack Alert (High)": {
+      "main": [[{ "node": "Merge All Routes", "type": "main", "index": 0 }]]
+    },
+    "Slack Alert (Medium)": {
+      "main": [[{ "node": "Merge All Routes", "type": "main", "index": 0 }]]
+    },
+    "Merge All Routes": {
+      "main": [[{ "node": "Loop Over Leads", "type": "main", "index": 0 }]]
+    },
+    "Generate Summary Report": {
+      "main": [[{ "node": "Send Summary to Slack", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {}
+}
