@@ -1,5 +1,5 @@
 {
-  "name": "AI Lead Scoring (Production - Writes to Notes)",
+  "name": "AI Lead Scoring (Production - Final)",
   "nodes": [
     {
       "parameters": {},
@@ -38,7 +38,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Data Normalization\nconst leads = [];\n\nfor (const item of $input.all()) {\n  const lead = item.json;\n  \n  const prepared = {\n    ...lead,\n    // Clean Email and Phone for Matching\n    email: lead.email ? lead.email.trim() : null,\n    phone: lead.phone ? lead.phone.toString().replace(/\\D/g,'') : null,\n    \n    // Defaults\n    company_size: lead.company_size || 'Unknown',\n    industry: lead.industry || 'Unspecified',\n    call_transcript: lead.call_transcript || 'No transcript provided.',\n    \n    processing_date: new Date().toISOString()\n  };\n  \n  // Only process if email exists (Required for GHL Update logic)\n  if (prepared.email) {\n    leads.push({ json: prepared });\n  }\n}\n\nreturn leads;"
+        "jsCode": "// Data Normalization\nconst leads = [];\n\nfor (const item of $input.all()) {\n  const lead = item.json;\n  \n  const prepared = {\n    ...lead,\n    // Clean Email and Phone for Matching\n    email: lead.email ? lead.email.trim() : null,\n    phone: lead.phone ? lead.phone.toString().replace(/\\D/g,'') : null,\n    \n    // Defaults\n    company_size: lead.company_size || 'Unknown',\n    industry: lead.industry || 'Unspecified',\n    call_transcript: lead.call_transcript || 'No transcript provided.',\n    \n    processing_date: new Date().toISOString()\n  };\n  \n  // Only process if email exists\n  if (prepared.email) {\n    leads.push({ json: prepared });\n  }\n}\n\nreturn leads;"
       },
       "id": "normalize-data",
       "name": "Normalize Data",
@@ -108,7 +108,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200') score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the GHL Notes field\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${groqResponse.pain_points.join(', ')}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200') score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the GHL Custom Field\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${groqResponse.pain_points.join(', ')}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "calculate-score",
       "name": "Calculate Score & Notes",
@@ -242,6 +242,10 @@
               "value": "={{ $json.company }}"
             },
             {
+              "name": "customFields",
+              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
+            },
+            {
               "name": "tags",
               "value": "={{ [\"Hot Lead\", \"AI Scored\"] }}"
             }
@@ -293,6 +297,10 @@
               "value": "={{ $json.company }}"
             },
             {
+              "name": "customFields",
+              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
+            },
+            {
               "name": "tags",
               "value": "={{ [\"Warm Lead\", \"AI Scored\"] }}"
             }
@@ -342,6 +350,10 @@
             {
               "name": "companyName",
               "value": "={{ $json.company }}"
+            },
+            {
+              "name": "customFields",
+              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
             },
             {
               "name": "tags",
