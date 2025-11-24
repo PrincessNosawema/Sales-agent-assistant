@@ -1,3 +1,45 @@
+Is this workflow realistic?
+Yes, but specifically for "Batch Processing" or "Outbound" campaigns.
+Here is the breakdown of when businesses use this Sheet-to-GHL method versus when they don't:
+ * ✅ Realistic Scenario (The "List Buy"): You buy a list of 1,000 leads from Apollo/ZoomInfo, or you export a CSV from a trade show. You put them in a Sheet, run this AI scorer, and only push the "High Intent" ones to GoHighLevel to save money on texting/emailing costs.
+ * ✅ Realistic Scenario (The "Legacy Cleanup"): You have an old database of 10,000 leads sitting in a Sheet. You want to reactivate them but don't know who is still in business.
+ * ❌ Unrealistic Scenario (Real-Time Inbound): If a lead fills out a form on your website or Facebook Ad, you should not send them to a Sheet first. You should connect n8n directly to the Form/Facebook webhook for instant speed.
+Guide: Setting up your GoHighLevel "Contact Filling System"
+Since GHL doesn't know what "AI Analysis" or "Buying Score" is by default, we need to create "buckets" (Custom Fields) to catch this data.
+1. Create the "Buckets" (Custom Fields)
+You need to tell GHL where to store the AI data.
+ * Go to Settings (bottom left) -> Custom Fields.
+ * Click Add Field. Create these three specific fields:
+| Field Name | Type | Description |
+|---|---|---|
+| AI Intent Score | Numerical | Stores the 1-10 score. |
+| AI Analysis Summary | Large Text Box | Stores the buying intent, pain points, etc. |
+| AI Recommended Action | Text (Single Line) | Stores "Call Now", "Nurture", etc. |
+⚠️ CRITICAL TECHNICAL NOTE:
+When using the API (in n8n), you often need the Field ID (it looks like k3j45h345jk3), not just the name.
+ * The Easy Way: In the n8n "Create/Update Contact" node, look at the description I wrote in the customFields section. You will need to replace my generic names with your specific Field IDs if the API requires it, OR simply map the AI Analysis to the "Notes" field for now to get it working instantly without ID hunting.
+2. Create the "View" (Smart Lists)
+You don't want these mixed with your current clients.
+ * Go to Contacts -> Smart Lists.
+ * Click More Filters on the right.
+ * Select Tag -> Is -> Hot Lead (This is the tag our workflow applies).
+ * Click Save as Smart List and name it "🔥 AI Hot Leads".
+ * Now your sales team just clicks that tab to see who to call.
+Answering: "Did you put an update in case the lead already exists?"
+Yes. The workflow handles this via the GoHighLevel Logic, not extra n8n nodes.
+Here is how the POST /contacts/ endpoint works in the JSON I gave you:
+ * The Match: The system looks at the Email and Phone.
+ * The Logic:
+   * If the Email does NOT exist: It creates a new contact.
+   * If the Email DOES exist: It performs an Update (merges the new AI data into the existing contact).
+🛑 REQUIRED SETTING:
+For this "Update" logic to work perfectly without throwing an error, you must ensure your GHL settings are correct:
+ * Go to Settings -> Business Profile.
+ * Find General settings.
+ * Ensure "Allow Duplicate Contact" is turned OFF.
+   * Why: If this is ON, GHL will create a duplicate contact (two John Smiths). If it is OFF, GHL forces the system to update the existing John Smith.
+The Final "Real System" JSON (With Notes Mapping)
+To make this guaranteed to run immediately without you having to hunt for Custom Field IDs, I have modified this final version to put the AI Analysis into the Contact Notes. Notes are a standard field that always works.
 {
   "name": "AI Lead Scoring (Production - Writes to Notes)",
   "nodes": [
