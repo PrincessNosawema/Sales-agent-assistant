@@ -1,5 +1,5 @@
 {
-  "name": "AI Lead Scoring (HubSpot Edition - Final)",
+  "name": "AI Lead Scoring (HubSpot Edition - Fixed)",
   "nodes": [
     {
       "parameters": {},
@@ -38,7 +38,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Data Normalization\nconst leads = [];\n\nfor (const item of $input.all()) {\n  const lead = item.json;\n  \n  const prepared = {\n    ...lead,\n    // Clean Email and Phone for Matching\n    email: lead.email ? lead.email.trim() : null,\n    phone: lead.phone ? lead.phone.toString().replace(/\\D/g,'') : null,\n    \n    // Defaults\n    company_size: lead.company_size || 'Unknown',\n    industry: lead.industry || 'Unspecified',\n    call_transcript: lead.call_transcript || 'No transcript provided.',\n    \n    processing_date: new Date().toISOString()\n  };\n  \n  // Only process if email exists\n  if (prepared.email) {\n    leads.push({ json: prepared });\n  }\n}\n\nreturn leads;"
+        "jsCode": "// Data Normalization\nconst leads = [];\n\nfor (const item of $input.all()) {\n  const lead = item.json;\n  \n  const prepared = {\n    ...lead,\n    // Clean Email and Phone for Matching\n    email: lead.email ? lead.email.trim().toLowerCase() : null,\n    phone: lead.phone ? lead.phone.toString().replace(/\\D/g,'') : null,\n    \n    // Defaults\n    company_size: lead.company_size || 'Unknown',\n    industry: lead.industry || 'Unspecified',\n    call_transcript: lead.call_transcript || 'No transcript provided.',\n    name: lead.name || 'Unknown',\n    company: lead.company || 'Unknown',\n    title: lead.title || 'Unknown',\n    engagement_level: lead.engagement_level || '5',\n    \n    processing_date: new Date().toISOString()\n  };\n  \n  // Only process if email exists\n  if (prepared.email) {\n    leads.push({ json: prepared });\n  }\n}\n\nreturn leads;"
       },
       "id": "normalize-data",
       "name": "Normalize Data",
@@ -48,6 +48,7 @@
     },
     {
       "parameters": {
+        "batchSize": 5,
         "options": {}
       },
       "id": "loop-start",
@@ -104,11 +105,12 @@
           "id": "2",
           "name": "Groq API"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\n// Determine Intent Tag for HubSpot\nlet intent_tag;\nif (composite_score >= 8) {\n  intent_tag = 'High Intent';\n} else if (composite_score >= 5) {\n  intent_tag = 'Medium Intent';\n} else {\n  intent_tag = 'Low Intent';\n}\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200') score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the HubSpot Custom Field\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${groqResponse.pain_points.join(', ')}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    intent_tag: intent_tag,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\n// Check if Groq failed or returned empty\nif (!$json.choices || !$json.choices[0] || !$json.choices[0].message) {\n  return [{\n    json: {\n      ...lead,\n      ai_analysis: { \n        buying_intent_score: 5,\n        urgency_level: 'low',\n        budget_indicators: false,\n        decision_maker: false,\n        pain_points: ['Analysis failed'],\n        objections: [],\n        sentiment: 'neutral',\n        next_best_action: 'Manual review required',\n        recommended_timing: 'TBD',\n        talking_points: []\n      },\n      composite_score: 5,\n      notes_summary: \"⚠️ AI Analysis Failed - Manual Review Required\",\n      intent_tag: \"Medium Intent\",\n      analysis_timestamp: new Date().toISOString(),\n      analysis_status: 'failed'\n    }\n  }];\n}\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n  // Validate required fields\n  if (!groqResponse.buying_intent_score) {\n    groqResponse.buying_intent_score = 5;\n  }\n  if (!groqResponse.pain_points) {\n    groqResponse.pain_points = [];\n  }\n  if (!groqResponse.next_best_action) {\n    groqResponse.next_best_action = 'Follow up required';\n  }\n  if (!groqResponse.recommended_timing) {\n    groqResponse.recommended_timing = 'Within 48 hours';\n  }\n} catch (e) {\n  groqResponse = { \n    buying_intent_score: 5, \n    pain_points: ['Parse error'],\n    next_best_action: 'Manual review required',\n    recommended_timing: 'TBD'\n  };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (parseFloat(groqResponse.buying_intent_score) || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\n// Determine Intent Tag for HubSpot\nlet intent_tag;\nif (composite_score >= 8) {\n  intent_tag = 'High Intent';\n} else if (composite_score >= 5) {\n  intent_tag = 'Medium Intent';\n} else {\n  intent_tag = 'Low Intent';\n}\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (['50-200', '200-500', '500+'].includes(lead.company_size)) score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the HubSpot Custom Field\nconst painPointsText = Array.isArray(groqResponse.pain_points) && groqResponse.pain_points.length > 0\n  ? groqResponse.pain_points.join(', ')\n  : 'None detected';\n\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nUrgency: ${groqResponse.urgency_level || 'medium'}\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${painPointsText}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    intent_tag: intent_tag,\n    analysis_timestamp: new Date().toISOString(),\n    analysis_status: 'success'\n  }\n}];"
       },
       "id": "calculate-score",
       "name": "Calculate Score & Notes",
@@ -215,11 +217,11 @@
             "customPropertiesValues": [
               {
                 "property": "firstname",
-                "value": "={{ $json.name.split(' ')[0] }}"
+                "value": "={{ $json.name.split(' ')[0] || 'Unknown' }}"
               },
               {
                 "property": "lastname",
-                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') || 'Unknown' }}"
               },
               {
                 "property": "company",
@@ -228,6 +230,10 @@
               {
                 "property": "phone",
                 "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "jobtitle",
+                "value": "={{ $json.title }}"
               },
               {
                 "property": "ai_lead_score",
@@ -248,8 +254,9 @@
       "id": "hubspot-high",
       "name": "HubSpot Upsert (High)",
       "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 1,
-      "position": [1780, 180]
+      "typeVersion": 2,
+      "position": [1780, 180],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -262,11 +269,11 @@
             "customPropertiesValues": [
               {
                 "property": "firstname",
-                "value": "={{ $json.name.split(' ')[0] }}"
+                "value": "={{ $json.name.split(' ')[0] || 'Unknown' }}"
               },
               {
                 "property": "lastname",
-                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') || 'Unknown' }}"
               },
               {
                 "property": "company",
@@ -275,6 +282,10 @@
               {
                 "property": "phone",
                 "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "jobtitle",
+                "value": "={{ $json.title }}"
               },
               {
                 "property": "ai_lead_score",
@@ -295,8 +306,9 @@
       "id": "hubspot-medium",
       "name": "HubSpot Upsert (Medium)",
       "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 1,
-      "position": [1780, 300]
+      "typeVersion": 2,
+      "position": [1780, 300],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -309,11 +321,11 @@
             "customPropertiesValues": [
               {
                 "property": "firstname",
-                "value": "={{ $json.name.split(' ')[0] }}"
+                "value": "={{ $json.name.split(' ')[0] || 'Unknown' }}"
               },
               {
                 "property": "lastname",
-                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') || 'Unknown' }}"
               },
               {
                 "property": "company",
@@ -322,6 +334,10 @@
               {
                 "property": "phone",
                 "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "jobtitle",
+                "value": "={{ $json.title }}"
               },
               {
                 "property": "ai_lead_score",
@@ -342,8 +358,9 @@
       "id": "hubspot-low",
       "name": "HubSpot Upsert (Low)",
       "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 1,
-      "position": [1780, 420]
+      "typeVersion": 2,
+      "position": [1780, 420],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -354,7 +371,7 @@
           "parameters": [
             {
               "name": "text",
-              "value": "=🔥 *HIGH PRIORITY LEAD*\n\n*{{ $json.name }}* from *{{ $json.company }}*\nScore: {{ $json.composite_score }}/10\n\n*Pain Points:*\n{{ $json.ai_analysis.pain_points.join('\\n• ') }}\n\n*Next Action:* {{ $json.ai_analysis.next_best_action }}"
+              "value": "={{ '🔥 *HIGH PRIORITY LEAD*\\n\\n*' + $json.name + '* from *' + $json.company + '*\\nScore: ' + $json.composite_score + '/10\\n\\n*Pain Points:*\\n• ' + ($json.ai_analysis.pain_points && Array.isArray($json.ai_analysis.pain_points) ? $json.ai_analysis.pain_points.join('\\n• ') : 'None') + '\\n\\n*Next Action:* ' + ($json.ai_analysis.next_best_action || 'Follow up required') }}"
             }
           ]
         },
@@ -364,7 +381,8 @@
       "name": "Slack Alert (High)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 180]
+      "position": [2000, 180],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -375,7 +393,7 @@
           "parameters": [
             {
               "name": "text",
-              "value": "=⚡ *Medium Priority Lead*\n{{ $json.name }} - {{ $json.company }}\nScore: {{ $json.composite_score }}/10\nAction: {{ $json.ai_analysis.next_best_action }}"
+              "value": "={{ '⚡ *Medium Priority Lead*\\n' + $json.name + ' - ' + $json.company + '\\nScore: ' + $json.composite_score + '/10\\nAction: ' + ($json.ai_analysis.next_best_action || 'Follow up required') }}"
             }
           ]
         },
@@ -385,25 +403,30 @@
       "name": "Slack Alert (Medium)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 300]
+      "position": [2000, 300],
+      "onError": "continueRegularOutput"
     },
     {
-      "parameters": {},
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
       "id": "merge-results",
       "name": "Merge All Routes",
       "type": "n8n-nodes-base.merge",
-      "typeVersion": 2.1,
+      "typeVersion": 3,
       "position": [2220, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Generate summary report\nconst allLeads = $input.all().map(item => item.json);\n\nconst summary = {\n  total_leads: allLeads.length,\n  high_intent: allLeads.filter(l => l.composite_score >= 8).length,\n  medium_intent: allLeads.filter(l => l.composite_score >= 5 && l.composite_score < 8).length,\n  low_intent: allLeads.filter(l => l.composite_score < 5).length,\n  average_score: allLeads.length > 0 ? (allLeads.reduce((sum, l) => sum + l.composite_score, 0) / allLeads.length).toFixed(2) : 0,\n  generated_at: new Date().toISOString()\n};\n\nreturn [{ json: { summary, detailed_leads: allLeads } }];"
+        "jsCode": "// Generate summary report\nconst allLeads = $input.all().map(item => item.json);\n\nconst summary = {\n  total_leads: allLeads.length,\n  high_intent: allLeads.filter(l => l.composite_score >= 8).length,\n  medium_intent: allLeads.filter(l => l.composite_score >= 5 && l.composite_score < 8).length,\n  low_intent: allLeads.filter(l => l.composite_score < 5).length,\n  average_score: allLeads.length > 0 ? (allLeads.reduce((sum, l) => sum + l.composite_score, 0) / allLeads.length).toFixed(2) : 0,\n  successful_analyses: allLeads.filter(l => l.analysis_status === 'success').length,\n  failed_analyses: allLeads.filter(l => l.analysis_status === 'failed').length,\n  generated_at: new Date().toISOString()\n};\n\nreturn [{ json: { summary, detailed_leads: allLeads } }];"
       },
       "id": "generate-summary",
       "name": "Generate Summary Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2660, 300]
+      "position": [2440, 300]
     },
     {
       "parameters": {
@@ -414,7 +437,7 @@
           "parameters": [
             {
               "name": "text",
-              "value": "=📊 *Lead Analysis Summary*\n\n*Total Leads Analyzed:* {{ $json.summary.total_leads }}\n*Average Score:* {{ $json.summary.average_score }}/10\n\n*Distribution:*\n🔥 High Intent: {{ $json.summary.high_intent }}\n⚡ Medium Intent: {{ $json.summary.medium_intent }}\n❄️ Low Intent: {{ $json.summary.low_intent }}"
+              "value": "={{ '📊 *Lead Analysis Summary*\\n\\n*Total Leads Analyzed:* ' + $json.summary.total_leads + '\\n*Average Score:* ' + $json.summary.average_score + '/10\\n*Successful Analyses:* ' + $json.summary.successful_analyses + '\\n*Failed Analyses:* ' + $json.summary.failed_analyses + '\\n\\n*Distribution:*\\n🔥 High Intent: ' + $json.summary.high_intent + '\\n⚡ Medium Intent: ' + $json.summary.medium_intent + '\\n❄️ Low Intent: ' + $json.summary.low_intent }}"
             }
           ]
         },
@@ -424,7 +447,8 @@
       "name": "Send Summary to Slack",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2880, 300]
+      "position": [2660, 300],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -438,10 +462,7 @@
       "main": [[{ "node": "Loop Over Leads", "type": "main", "index": 0 }]]
     },
     "Loop Over Leads": {
-      "main": [
-        [{ "node": "Groq AI Analysis", "type": "main", "index": 0 }],
-        [{ "node": "Generate Summary Report", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Groq AI Analysis", "type": "main", "index": 0 }]]
     },
     "Groq AI Analysis": {
       "main": [[{ "node": "Calculate Score & Notes", "type": "main", "index": 0 }]]
@@ -473,10 +494,10 @@
     },
     "Merge All Routes": {
       "main": [[{ "node": "Loop Over Leads", "type": "main", "index": 0 }]]
-    },
-    "Generate Summary Report": {
-      "main": [[{ "node": "Send Summary to Slack", "type": "main", "index": 0 }]]
     }
   },
-  "pinData": {}
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
 }
