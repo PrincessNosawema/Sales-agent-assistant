@@ -1,5 +1,5 @@
 {
-  "name": "AI Lead Scoring (Production - Final)",
+  "name": "AI Lead Scoring (HubSpot Edition - Final)",
   "nodes": [
     {
       "parameters": {},
@@ -108,7 +108,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200') score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the GHL Custom Field\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${groqResponse.pain_points.join(', ')}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "// Parse Groq response and calculate composite score\nconst lead = $('Loop Over Leads').item.json;\n\nlet groqResponse;\ntry {\n  groqResponse = JSON.parse($json.choices[0].message.content);\n} catch (e) {\n  groqResponse = { buying_intent_score: 5, pain_points: [] };\n}\n\n// Composite scoring algorithm\nconst scores = {\n  ai_intent: (groqResponse.buying_intent_score || 5) * 0.5,\n  engagement: (parseFloat(lead.engagement_level) || 5) * 0.3,\n  fit_score: calculateFitScore(lead) * 0.2\n};\n\nconst composite_score = Object.values(scores).reduce((a, b) => a + b, 0);\n\n// Determine Intent Tag for HubSpot\nlet intent_tag;\nif (composite_score >= 8) {\n  intent_tag = 'High Intent';\n} else if (composite_score >= 5) {\n  intent_tag = 'Medium Intent';\n} else {\n  intent_tag = 'Low Intent';\n}\n\nfunction calculateFitScore(lead) {\n  let score = 5;\n  if (['SaaS', 'Finance', 'Technology'].includes(lead.industry)) score += 2;\n  if (lead.company_size === '50-200') score += 2;\n  return Math.min(score, 10);\n}\n\n// Create a text summary for the HubSpot Custom Field\nconst notesSummary = `🤖 AI ANALYSIS\\nScore: ${composite_score.toFixed(1)}/10\\nAction: ${groqResponse.next_best_action}\\nPain Points: ${groqResponse.pain_points.join(', ')}\\nTiming: ${groqResponse.recommended_timing}`;\n\nreturn [{\n  json: {\n    ...lead,\n    ai_analysis: groqResponse,\n    composite_score: parseFloat(composite_score.toFixed(2)),\n    notes_summary: notesSummary,\n    intent_tag: intent_tag,\n    analysis_timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "calculate-score",
       "name": "Calculate Score & Notes",
@@ -206,167 +206,143 @@
     },
     {
       "parameters": {
-        "url": "https://rest.gohighlevel.com/v1/contacts/",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_GHL_API_KEY"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "email",
-              "value": "={{ $json.email }}"
-            },
-            {
-              "name": "phone",
-              "value": "={{ $json.phone }}"
-            },
-            {
-              "name": "firstName",
-              "value": "={{ $json.name.split(' ')[0] }}"
-            },
-            {
-              "name": "lastName",
-              "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
-            },
-            {
-              "name": "companyName",
-              "value": "={{ $json.company }}"
-            },
-            {
-              "name": "customFields",
-              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
-            },
-            {
-              "name": "tags",
-              "value": "={{ [\"Hot Lead\", \"AI Scored\"] }}"
-            }
-          ]
-        },
-        "options": {}
+        "authentication": "oAuth2",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "firstname",
+                "value": "={{ $json.name.split(' ')[0] }}"
+              },
+              {
+                "property": "lastname",
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+              },
+              {
+                "property": "company",
+                "value": "={{ $json.company }}"
+              },
+              {
+                "property": "phone",
+                "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "ai_lead_score",
+                "value": "={{ $json.composite_score }}"
+              },
+              {
+                "property": "ai_analysis_notes",
+                "value": "={{ $json.notes_summary }}"
+              },
+              {
+                "property": "ai_intent_tag",
+                "value": "={{ $json.intent_tag }}"
+              }
+            ]
+          }
+        }
       },
-      "id": "create-ghl-high",
-      "name": "Upsert GHL (High)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "hubspot-high",
+      "name": "HubSpot Upsert (High)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 1,
       "position": [1780, 180]
     },
     {
       "parameters": {
-        "url": "https://rest.gohighlevel.com/v1/contacts/",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_GHL_API_KEY"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "email",
-              "value": "={{ $json.email }}"
-            },
-            {
-              "name": "phone",
-              "value": "={{ $json.phone }}"
-            },
-            {
-              "name": "firstName",
-              "value": "={{ $json.name.split(' ')[0] }}"
-            },
-            {
-              "name": "lastName",
-              "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
-            },
-            {
-              "name": "companyName",
-              "value": "={{ $json.company }}"
-            },
-            {
-              "name": "customFields",
-              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
-            },
-            {
-              "name": "tags",
-              "value": "={{ [\"Warm Lead\", \"AI Scored\"] }}"
-            }
-          ]
-        },
-        "options": {}
+        "authentication": "oAuth2",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "firstname",
+                "value": "={{ $json.name.split(' ')[0] }}"
+              },
+              {
+                "property": "lastname",
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+              },
+              {
+                "property": "company",
+                "value": "={{ $json.company }}"
+              },
+              {
+                "property": "phone",
+                "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "ai_lead_score",
+                "value": "={{ $json.composite_score }}"
+              },
+              {
+                "property": "ai_analysis_notes",
+                "value": "={{ $json.notes_summary }}"
+              },
+              {
+                "property": "ai_intent_tag",
+                "value": "={{ $json.intent_tag }}"
+              }
+            ]
+          }
+        }
       },
-      "id": "create-ghl-medium",
-      "name": "Upsert GHL (Medium)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "hubspot-medium",
+      "name": "HubSpot Upsert (Medium)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 1,
       "position": [1780, 300]
     },
     {
       "parameters": {
-        "url": "https://rest.gohighlevel.com/v1/contacts/",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_GHL_API_KEY"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "email",
-              "value": "={{ $json.email }}"
-            },
-            {
-              "name": "phone",
-              "value": "={{ $json.phone }}"
-            },
-            {
-              "name": "firstName",
-              "value": "={{ $json.name.split(' ')[0] }}"
-            },
-            {
-              "name": "lastName",
-              "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
-            },
-            {
-              "name": "companyName",
-              "value": "={{ $json.company }}"
-            },
-            {
-              "name": "customFields",
-              "value": "={{ {\"REPLACE_WITH_FIELD_ID\": $json.notes_summary} }}"
-            },
-            {
-              "name": "tags",
-              "value": "={{ [\"Cold Lead\", \"AI Scored\"] }}"
-            }
-          ]
-        },
-        "options": {}
+        "authentication": "oAuth2",
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "additionalFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "firstname",
+                "value": "={{ $json.name.split(' ')[0] }}"
+              },
+              {
+                "property": "lastname",
+                "value": "={{ $json.name.split(' ').slice(1).join(' ') }}"
+              },
+              {
+                "property": "company",
+                "value": "={{ $json.company }}"
+              },
+              {
+                "property": "phone",
+                "value": "={{ $json.phone }}"
+              },
+              {
+                "property": "ai_lead_score",
+                "value": "={{ $json.composite_score }}"
+              },
+              {
+                "property": "ai_analysis_notes",
+                "value": "={{ $json.notes_summary }}"
+              },
+              {
+                "property": "ai_intent_tag",
+                "value": "={{ $json.intent_tag }}"
+              }
+            ]
+          }
+        }
       },
-      "id": "create-ghl-low",
-      "name": "Upsert GHL (Low)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "hubspot-low",
+      "name": "HubSpot Upsert (Low)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 1,
       "position": [1780, 420]
     },
     {
@@ -475,18 +451,18 @@
     },
     "Route by Score": {
       "main": [
-        [{ "node": "Upsert GHL (High)", "type": "main", "index": 0 }],
-        [{ "node": "Upsert GHL (Medium)", "type": "main", "index": 0 }],
-        [{ "node": "Upsert GHL (Low)", "type": "main", "index": 0 }]
+        [{ "node": "HubSpot Upsert (High)", "type": "main", "index": 0 }],
+        [{ "node": "HubSpot Upsert (Medium)", "type": "main", "index": 0 }],
+        [{ "node": "HubSpot Upsert (Low)", "type": "main", "index": 0 }]
       ]
     },
-    "Upsert GHL (High)": {
+    "HubSpot Upsert (High)": {
       "main": [[{ "node": "Slack Alert (High)", "type": "main", "index": 0 }]]
     },
-    "Upsert GHL (Medium)": {
+    "HubSpot Upsert (Medium)": {
       "main": [[{ "node": "Slack Alert (Medium)", "type": "main", "index": 0 }]]
     },
-    "Upsert GHL (Low)": {
+    "HubSpot Upsert (Low)": {
       "main": [[{ "node": "Merge All Routes", "type": "main", "index": 0 }]]
     },
     "Slack Alert (High)": {
