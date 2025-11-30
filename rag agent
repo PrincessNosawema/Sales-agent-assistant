@@ -1,4 +1,5 @@
 {
+  "name": "Google Drive to Pinecone RAG",
   "nodes": [
     {
       "parameters": {
@@ -17,10 +18,13 @@
       "name": "Google Drive Trigger",
       "type": "n8n-nodes-base.googleDriveTrigger",
       "typeVersion": 1,
-      "position": [
-        460,
-        220
-      ]
+      "position": [460, 220],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
     },
     {
       "parameters": {
@@ -31,24 +35,24 @@
       "name": "Download File",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
-      "position": [
-        680,
-        220
-      ]
+      "position": [680, 220],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
     },
     {
       "parameters": {
         "language": "python",
-        "code": "# Best Practice: Filter for valid text types before processing\nfile_mime = $(\"Google Drive Trigger\").first().json[\"mimeType\"]\nvalid_types = [\"application/pdf\", \"text/plain\", \"application/vnd.google-apps.document\", \"application/vnd.openxmlformats-officedocument.wordprocessingml.document\"]\n\nif file_mime not in valid_types:\n    # In a real scenario, you might want to route this to a 'Stop' node\n    # For now, we return a flag to filter later\n    return {'process': False, 'reason': 'Invalid Mime Type'}\n\nreturn {'process': True, 'mime': file_mime}"
+        "code": "# Filter for valid text document types\nfile_mime = $('Google Drive Trigger').first().json['mimeType']\nfile_name = $('Google Drive Trigger').first().json['name']\n\nvalid_types = [\n    'application/pdf',\n    'text/plain',\n    'application/vnd.google-apps.document',\n    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n    'application/msword'\n]\n\nif file_mime not in valid_types:\n    return [{'json': {'process': False, 'reason': 'Invalid file type', 'mime': file_mime, 'name': file_name}}]\n\nreturn [{'json': {'process': True, 'mime': file_mime, 'name': file_name}}]"
       },
       "id": "filter-files",
       "name": "Python Filter",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        900,
-        220
-      ]
+      "position": [900, 220]
     },
     {
       "parameters": {
@@ -65,10 +69,7 @@
       "name": "Is Text File?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [
-        1120,
-        220
-      ]
+      "position": [1120, 220]
     },
     {
       "parameters": {
@@ -76,74 +77,71 @@
       },
       "id": "extract-text",
       "name": "Text Extractor",
-      "type": "n8n-nodes-base.textExtract",
+      "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
-      "position": [
-        1340,
-        200
-      ]
+      "position": [1340, 180]
     },
     {
       "parameters": {
-        "chunkSize": 1000,
-        "chunkOverlap": 200
-      },
-      "id": "split-text",
-      "name": "Recursive Character Text Splitter",
-      "type": "n8n-nodes-base.recursiveCharacterTextSplitter",
-      "typeVersion": 1,
-      "position": [
-        1560,
-        360
-      ]
-    },
-    {
-      "parameters": {
-        "modelId": "models/text-embedding-004"
-      },
-      "id": "gemini-embeddings",
-      "name": "Google Gemini Embeddings",
-      "type": "n8n-nodes-base.googleGeminiEmbeddings",
-      "typeVersion": 1,
-      "position": [
-        1680,
-        360
-      ],
-      "credentials": {
-        "googlePalmApi": {
-          "id": "YOUR_CREDENTIAL_ID",
-          "name": "Google Gemini(PaLM) Api account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "upsert",
+        "mode": "insert",
         "pineconeIndex": {
           "__rl": true,
           "value": "YOUR_INDEX_NAME",
           "mode": "list",
           "cachedResultName": "starter-index"
         },
-        "namespace": "={{ $('Google Drive Trigger').item.json.parents[0] }}",
         "options": {
           "pineconeNamespace": "={{ $('Google Drive Trigger').item.json.parents[0] }}"
         }
       },
-      "id": "pinecone-upsert",
+      "id": "pinecone-insert",
       "name": "Pinecone Vector Store",
-      "type": "n8n-nodes-base.pineconeVectorStore",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
       "typeVersion": 1,
-      "position": [
-        1800,
-        200
-      ],
+      "position": [1560, 180],
       "credentials": {
         "pineconeApi": {
-          "id": "YOUR_PINECONE_ID",
+          "id": "YOUR_PINECONE_CREDENTIAL_ID",
           "name": "Pinecone account"
         }
       }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-004",
+        "options": {}
+      },
+      "id": "gemini-embeddings",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [1560, 360],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 1000,
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "id": "text-splitter",
+      "name": "Recursive Character Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [1340, 360]
+    },
+    {
+      "parameters": {},
+      "id": "stop-node",
+      "name": "Stop - Invalid File",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1340, 400]
     }
   ],
   "connections": {
@@ -188,6 +186,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Stop - Invalid File",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -213,7 +218,7 @@
         ]
       ]
     },
-    "Google Gemini Embeddings": {
+    "Embeddings Google Gemini": {
       "ai_embedding": [
         [
           {
@@ -224,5 +229,6 @@
         ]
       ]
     }
-  }
+  },
+  "pinData": {}
 }
