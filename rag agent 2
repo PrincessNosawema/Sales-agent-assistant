@@ -1,0 +1,233 @@
+{
+  "name": "Google Drive to Pinecone RAG",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "folder",
+        "watchFolderId": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+        "event": "fileCreated"
+      },
+      "id": "trigger-drive",
+      "name": "Google Drive Trigger",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [460, 220],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $json.id }}"
+      },
+      "id": "download-file",
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [680, 220],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter for valid text document types\nconst fileMime = $('Google Drive Trigger').first().json.mimeType;\nconst fileName = $('Google Drive Trigger').first().json.name;\n\nconst validTypes = [\n  'application/pdf',\n  'text/plain',\n  'application/vnd.google-apps.document',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n  'application/msword'\n];\n\nif (!validTypes.includes(fileMime)) {\n  return [{\n    json: {\n      process: false,\n      reason: 'Invalid file type',\n      mime: fileMime,\n      name: fileName\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    process: true,\n    mime: fileMime,\n    name: fileName\n  }\n}];"
+      },
+      "id": "filter-files",
+      "name": "JavaScript Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.process }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-process",
+      "name": "Is Text File?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "dataPropertyName": "data"
+      },
+      "id": "extract-text",
+      "name": "Text Extractor",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [1340, 180]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "YOUR_INDEX_NAME",
+          "mode": "list",
+          "cachedResultName": "starter-index"
+        },
+        "options": {
+          "pineconeNamespace": "={{ $('Google Drive Trigger').item.json.parents[0] }}"
+        }
+      },
+      "id": "pinecone-insert",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [1560, 180],
+      "credentials": {
+        "pineconeApi": {
+          "id": "YOUR_PINECONE_CREDENTIAL_ID",
+          "name": "Pinecone account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-004",
+        "options": {}
+      },
+      "id": "gemini-embeddings",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [1560, 360],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 1000,
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "id": "text-splitter",
+      "name": "Recursive Character Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [1340, 360]
+    },
+    {
+      "parameters": {},
+      "id": "stop-node",
+      "name": "Stop - Invalid File",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Python Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Python Filter": {
+      "main": [
+        [
+          {
+            "node": "Is Text File?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Text File?": {
+      "main": [
+        [
+          {
+            "node": "Text Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop - Invalid File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Extractor": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
