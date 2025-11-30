@@ -1,6 +1,19 @@
 {
-  "name": "Google Drive to Pinecone RAG",
+  "name": "Optimized AI Knowledge Base Pipeline",
   "nodes": [
+    {
+      "parameters": {
+        "content": "## Optimized Knowledge Base\n\nMonitors Google Drive folder\nFilters valid documents\nProcesses with LangChain\nStores in Pinecone",
+        "height": 140,
+        "width": 280,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [340, 500],
+      "typeVersion": 1,
+      "id": "sticky-note-1",
+      "name": "Sticky Note"
+    },
     {
       "parameters": {
         "pollTimes": {
@@ -10,15 +23,22 @@
             }
           ]
         },
-        "triggerOn": "folder",
-        "watchFolderId": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
-        "event": "fileCreated"
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "Knowledge Base",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_FOLDER_ID"
+        },
+        "event": "fileCreated",
+        "options": {}
       },
-      "id": "trigger-drive",
-      "name": "Google Drive Trigger",
       "type": "n8n-nodes-base.googleDriveTrigger",
       "typeVersion": 1,
       "position": [460, 220],
+      "id": "trigger-drive",
+      "name": "Google Drive Trigger",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
@@ -29,13 +49,18 @@
     {
       "parameters": {
         "operation": "download",
-        "fileId": "={{ $json.id }}"
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
       },
-      "id": "download-file",
-      "name": "Download File",
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [680, 220],
+      "id": "download-file",
+      "name": "Download File",
       "credentials": {
         "googleDriveOAuth2Api": {
           "id": "YOUR_GOOGLE_DRIVE_CREDENTIAL_ID",
@@ -45,14 +70,13 @@
     },
     {
       "parameters": {
-        "language": "python",
-        "code": "# Filter for valid text document types\nfile_mime = $('Google Drive Trigger').first().json['mimeType']\nfile_name = $('Google Drive Trigger').first().json['name']\n\nvalid_types = [\n    'application/pdf',\n    'text/plain',\n    'application/vnd.google-apps.document',\n    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n    'application/msword'\n]\n\nif file_mime not in valid_types:\n    return [{'json': {'process': False, 'reason': 'Invalid file type', 'mime': file_mime, 'name': file_name}}]\n\nreturn [{'json': {'process': True, 'mime': file_mime, 'name': file_name}}]"
+        "jsCode": "// Filter for valid document types that can be processed\nconst fileMime = $input.first().json.mimeType;\nconst fileName = $input.first().json.name;\nconst fileId = $input.first().json.id;\n\n// Supported file types for document processing\nconst validTypes = [\n  'application/pdf',\n  'text/plain',\n  'application/vnd.google-apps.document',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n  'application/msword',\n  'text/markdown',\n  'text/csv',\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',\n  'application/vnd.ms-excel'\n];\n\nif (!validTypes.includes(fileMime)) {\n  return {\n    json: {\n      process: false,\n      reason: 'Unsupported file type',\n      mime: fileMime,\n      name: fileName,\n      fileId: fileId\n    }\n  };\n}\n\nreturn {\n  json: {\n    process: true,\n    mime: fileMime,\n    name: fileName,\n    fileId: fileId\n  }\n};"
       },
-      "id": "filter-files",
-      "name": "Python Filter",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 220]
+      "position": [900, 220],
+      "id": "file-filter",
+      "name": "File Type Filter"
     },
     {
       "parameters": {
@@ -65,40 +89,30 @@
           ]
         }
       },
-      "id": "check-process",
-      "name": "Is Text File?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1120, 220]
-    },
-    {
-      "parameters": {
-        "dataPropertyName": "data"
-      },
-      "id": "extract-text",
-      "name": "Text Extractor",
-      "type": "n8n-nodes-base.extractFromFile",
-      "typeVersion": 1,
-      "position": [1340, 180]
+      "position": [1120, 220],
+      "id": "check-valid",
+      "name": "Is Valid Document?"
     },
     {
       "parameters": {
         "mode": "insert",
         "pineconeIndex": {
           "__rl": true,
-          "value": "YOUR_INDEX_NAME",
+          "value": "YOUR_PINECONE_INDEX_NAME",
           "mode": "list",
-          "cachedResultName": "starter-index"
+          "cachedResultName": "knowledge-base"
         },
         "options": {
           "pineconeNamespace": "={{ $('Google Drive Trigger').item.json.parents[0] }}"
         }
       },
-      "id": "pinecone-insert",
-      "name": "Pinecone Vector Store",
       "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
-      "typeVersion": 1,
-      "position": [1560, 180],
+      "typeVersion": 1.3,
+      "position": [1560, 200],
+      "id": "pinecone-store",
+      "name": "Pinecone Vector Store",
       "credentials": {
         "pineconeApi": {
           "id": "YOUR_PINECONE_CREDENTIAL_ID",
@@ -111,11 +125,11 @@
         "model": "text-embedding-004",
         "options": {}
       },
-      "id": "gemini-embeddings",
-      "name": "Embeddings Google Gemini",
       "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
       "typeVersion": 1,
-      "position": [1560, 360],
+      "position": [1340, 380],
+      "id": "gemini-embeddings",
+      "name": "Embeddings Google Gemini",
       "credentials": {
         "googlePalmApi": {
           "id": "YOUR_GEMINI_CREDENTIAL_ID",
@@ -129,19 +143,31 @@
         "chunkOverlap": 200,
         "options": {}
       },
-      "id": "text-splitter",
-      "name": "Recursive Character Text Splitter",
       "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
       "typeVersion": 1,
-      "position": [1340, 360]
+      "position": [1120, 480],
+      "id": "text-splitter",
+      "name": "Recursive Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "loader": "pdfLoader",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [1340, 200],
+      "id": "data-loader",
+      "name": "Default Data Loader"
     },
     {
       "parameters": {},
-      "id": "stop-node",
-      "name": "Stop - Invalid File",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1340, 400]
+      "position": [1340, 400],
+      "id": "stop-invalid",
+      "name": "Stop - Invalid File"
     }
   ],
   "connections": {
@@ -160,29 +186,29 @@
       "main": [
         [
           {
-            "node": "Python Filter",
+            "node": "File Type Filter",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Python Filter": {
+    "File Type Filter": {
       "main": [
         [
           {
-            "node": "Is Text File?",
+            "node": "Is Valid Document?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is Text File?": {
+    "Is Valid Document?": {
       "main": [
         [
           {
-            "node": "Text Extractor",
+            "node": "Pinecone Vector Store",
             "type": "main",
             "index": 0
           }
@@ -191,28 +217,6 @@
           {
             "node": "Stop - Invalid File",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Text Extractor": {
-      "main": [
-        [
-          {
-            "node": "Pinecone Vector Store",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Recursive Character Text Splitter": {
-      "ai_textSplitter": [
-        [
-          {
-            "node": "Pinecone Vector Store",
-            "type": "ai_textSplitter",
             "index": 0
           }
         ]
@@ -228,7 +232,33 @@
           }
         ]
       ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
     }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
   },
   "pinData": {}
 }
