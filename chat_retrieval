@@ -1,127 +1,152 @@
 {
+  "name": "Slack RAG Chatbot - Fixed",
   "nodes": [
     {
       "parameters": {
-        "events": [
-          "message"
-        ],
+        "content": "## Slack RAG Chatbot\n\n✅ Listens to Slack messages\n✅ Searches knowledge base\n✅ Responds with AI-powered answers\n✅ Ignores bot messages",
+        "height": 160,
+        "width": 300,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [340, 520],
+      "typeVersion": 1,
+      "id": "sticky-note",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "events": ["message"],
         "channelId": {
           "__rl": true,
           "value": "YOUR_SLACK_CHANNEL_ID",
           "mode": "list",
           "cachedResultName": "general"
-        }
+        },
+        "options": {}
       },
       "id": "slack-trigger",
       "name": "Slack Trigger",
       "type": "n8n-nodes-base.slackTrigger",
       "typeVersion": 1,
-      "position": [
-        460,
-        300
-      ],
+      "position": [460, 300],
       "credentials": {
-        "slackTokenApi": {
+        "slackApi": {
           "id": "YOUR_SLACK_CRED_ID",
-          "name": "Slack Token account"
+          "name": "Slack account"
         }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "boolean": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.subtype }}",
-              "value2": "bot_message",
-              "operator": "notEqual"
+              "id": "condition-1",
+              "leftValue": "={{ $json.subtype }}",
+              "rightValue": "bot_message",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.bot_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isEmpty"
+              }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
       "id": "filter-bots",
       "name": "Ignore Bots",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        660,
-        300
-      ]
+      "typeVersion": 2,
+      "position": [680, 300]
     },
     {
       "parameters": {
         "promptType": "define",
         "text": "={{ $json.text }}",
+        "hasOutputParser": true,
         "options": {
-          "systemMessage": "You are a highly intelligent corporate knowledge assistant. \n\nYour Goal: Answer the user's query using ONLY the provided context.\n\nRules:\n1. If the answer is in the context, provide a clear, concise summary.\n2. If the context mentions a specific file, mention the file name.\n3. If the context does NOT contain the answer, politely state: \"I'm sorry, I don't have enough information in my knowledge base to answer that.\"\n4. Do not hallucinate or make up facts outside the context."
+          "systemMessage": "You are a highly intelligent corporate knowledge assistant with access to a vector database of company documents.\n\n# Your Mission\nAnswer user questions using ONLY information from the knowledge base retrieval tool.\n\n# Instructions\n1. Use the vector_store_retriever tool to search for relevant information\n2. Base your answer ONLY on the retrieved context\n3. If context mentions specific files, reference them by name\n4. If no relevant information is found, politely say: \"I don't have information about that in my knowledge base. Could you rephrase or ask something else?\"\n5. Be conversational and helpful\n6. Keep answers concise but complete\n\n# What NOT to do\n❌ Do not make up information\n❌ Do not use knowledge outside the retrieved context\n❌ Do not apologize excessively\n❌ Do not mention technical details about the retrieval system"
         }
       },
       "id": "ai-agent",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.6,
-      "position": [
-        900,
-        300
-      ]
+      "typeVersion": 1.7,
+      "position": [900, 280]
     },
     {
       "parameters": {
-        "modelName": "models/gemini-1.5-flash"
+        "model": "gemini-1.5-flash",
+        "options": {
+          "temperature": 0.3,
+          "maxOutputTokens": 1024
+        }
       },
       "id": "gemini-chat",
       "name": "Google Gemini Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
-      "position": [
-        900,
-        520
-      ],
+      "position": [900, 500],
       "credentials": {
         "googlePalmApi": {
           "id": "YOUR_GEMINI_CRED_ID",
-          "name": "Google Gemini(PaLM) Api account"
+          "name": "Google Gemini account"
         }
       }
     },
     {
       "parameters": {
-        "modelId": "models/text-embedding-004"
+        "model": "text-embedding-004",
+        "options": {}
       },
-      "id": "gemini-embeddings-chat",
-      "name": "Google Gemini Embeddings",
-      "type": "n8n-nodes-base.googleGeminiEmbeddings",
+      "id": "gemini-embeddings",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
       "typeVersion": 1,
-      "position": [
-        1040,
-        540
-      ],
+      "position": [1120, 680],
       "credentials": {
         "googlePalmApi": {
           "id": "YOUR_GEMINI_CRED_ID",
-          "name": "Google Gemini(PaLM) Api account"
+          "name": "Google Gemini account"
         }
       }
     },
     {
       "parameters": {
-        "mode": "retrieve",
+        "name": "vector_store_retriever",
+        "description": "Search the company knowledge base for relevant documents and information. Use this tool to find answers to user questions.",
         "pineconeIndex": {
           "__rl": true,
-          "value": "YOUR_INDEX_NAME",
+          "value": "documentknowledge",
           "mode": "list",
-          "cachedResultName": "starter-index"
+          "cachedResultName": "documentknowledge"
         },
-        "topK": 4
+        "options": {
+          "topK": 5,
+          "pineconeNamespace": "YOUR_NAMESPACE_OR_LEAVE_EMPTY"
+        }
       },
       "id": "pinecone-retriever",
-      "name": "Pinecone Retriever",
-      "type": "n8n-nodes-base.pineconeVectorStore",
+      "name": "Pinecone Vector Store Retriever",
+      "type": "@n8n/n8n-nodes-langchain.toolVectorStore",
       "typeVersion": 1,
-      "position": [
-        1060,
-        420
-      ],
+      "position": [1120, 500],
       "credentials": {
         "pineconeApi": {
           "id": "YOUR_PINECONE_CRED_ID",
@@ -131,6 +156,7 @@
     },
     {
       "parameters": {
+        "operation": "post",
         "channelId": {
           "__rl": true,
           "value": "={{ $('Slack Trigger').item.json.channel }}",
@@ -142,19 +168,24 @@
         }
       },
       "id": "slack-reply",
-      "name": "Slack Reply",
+      "name": "Send Slack Reply",
       "type": "n8n-nodes-base.slack",
-      "typeVersion": 2,
-      "position": [
-        1260,
-        300
-      ],
+      "typeVersion": 2.2,
+      "position": [1120, 280],
       "credentials": {
         "slackApi": {
           "id": "YOUR_SLACK_CRED_ID",
-          "name": "Slack Web API account"
+          "name": "Slack account"
         }
       }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 480],
+      "id": "stop-bots",
+      "name": "Stop - Bot Message"
     }
   ],
   "connections": {
@@ -177,6 +208,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Stop - Bot Message",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -184,7 +222,7 @@
       "main": [
         [
           {
-            "node": "Slack Reply",
+            "node": "Send Slack Reply",
             "type": "main",
             "index": 0
           }
@@ -202,7 +240,7 @@
         ]
       ]
     },
-    "Pinecone Retriever": {
+    "Pinecone Vector Store Retriever": {
       "ai_tool": [
         [
           {
@@ -213,16 +251,21 @@
         ]
       ]
     },
-    "Google Gemini Embeddings": {
+    "Embeddings Google Gemini": {
       "ai_embedding": [
         [
           {
-            "node": "Pinecone Retriever",
+            "node": "Pinecone Vector Store Retriever",
             "type": "ai_embedding",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
 }
