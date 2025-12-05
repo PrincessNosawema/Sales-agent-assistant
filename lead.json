@@ -1,0 +1,403 @@
+{
+  "name": "Lead Enrichment Pipeline",
+  "version": 1,
+  "flow": [
+    {
+      "id": 1,
+      "module": "apify:watchActorRuns",
+      "version": 1,
+      "mapper": {
+        "actorId": "compass/crawler-google-places",
+        "status": "SUCCEEDED"
+      },
+      "metadata": {
+        "name": "1. Apify - Watch Runs",
+        "restore": {
+          "parameters": {
+            "actorId": {
+              "mode": "edit"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "apify:listDatasetItems",
+      "version": 1,
+      "mapper": {
+        "datasetId": "{{1.data.defaultDatasetId}}",
+        "limit": 50
+      },
+      "metadata": {
+        "name": "2. Apify - Get Dataset",
+        "restore": {
+          "parameters": {
+            "datasetId": {
+              "mode": "map"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "router:iterator",
+      "version": 1,
+      "mapper": {
+        "array": "{{2.items}}",
+        "item": "item"
+      },
+      "metadata": {
+        "name": "3. Iterator",
+        "restore": {
+          "parameters": {
+            "array": {
+              "mode": "map"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:request",
+      "version": 2,
+      "mapper": {
+        "url": "https://api.apollo.io/v1/organizations/enrich",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "YOUR_APOLLO_API_KEY"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "json",
+        "content": "{\n  \"domain\": \"{{replace(replace(replace(3.website; \"https://\"; \"\"); \"http://\"; \"\"); \"www.\"; \"\")}}",
+        "parseResponse": true
+      },
+      "metadata": {
+        "name": "4. Apollo - Get Company Data",
+        "restore": {}
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:request",
+      "version": 2,
+      "mapper": {
+        "url": "https://api.apollo.io/v1/people/search",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "YOUR_APOLLO_API_KEY"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "json",
+        "content": "{\n  \"organization_ids\": [\"{{4.organization.id}}\"],\n  \"person_titles\": [\"Owner\", \"CEO\", \"President\", \"Founder\", \"Managing Director\", \"General Manager\"],\n  \"per_page\": 1,\n  \"page\": 1\n}",
+        "parseResponse": true
+      },
+      "metadata": {
+        "name": "5. Apollo - Find Contact Email",
+        "restore": {}
+      }
+    },
+    {
+      "id": 6,
+      "module": "router:setMultipleVariables",
+      "version": 1,
+      "mapper": {
+        "variables": [
+          {
+            "name": "EmployeeCount",
+            "value": "{{if(4.organization.estimated_num_employees; 4.organization.estimated_num_employees; \"Unknown\")}}"
+          },
+          {
+            "name": "Revenue",
+            "value": "{{if(4.organization.estimated_annual_revenue; \"$\" + 4.organization.estimated_annual_revenue; \"Unknown\")}}"
+          },
+          {
+            "name": "Industry",
+            "value": "{{if(4.organization.industry; 4.organization.industry; \"Unknown\")}}"
+          },
+          {
+            "name": "ContactName",
+            "value": "{{if(5.people[1].first_name; 5.people[1].first_name + \" \" + 5.people[1].last_name; \"Not found\")}}"
+          },
+          {
+            "name": "ContactTitle",
+            "value": "{{if(5.people[1].title; 5.people[1].title; \"Unknown\")}}"
+          },
+          {
+            "name": "ContactEmail",
+            "value": "{{if(5.people[1].email; 5.people[1].email; \"Not found\")}}"
+          }
+        ]
+      },
+      "metadata": {
+        "name": "6. Set Variables - Extract Data",
+        "restore": {}
+      }
+    },
+    {
+      "id": 7,
+      "module": "http:request",
+      "version": 2,
+      "mapper": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "queryString": [
+          {
+            "name": "key",
+            "value": "YOUR_GEMINI_API_KEY"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "json",
+        "content": "{\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Analyze this B2B lead:\\n\\nBusiness: {{3.title}}\\nWebsite: {{3.website}}\\nRating: {{3.totalScore}}/5 ({{3.reviewsCount}} reviews)\\nLocation: {{3.address}}\\nEmployees: {{6.EmployeeCount}}\\nRevenue: {{6.Revenue}}\\nIndustry: {{6.Industry}}\\nContact: {{6.ContactName}} - {{6.ContactTitle}}\\nEmail: {{6.ContactEmail}}\\n\\nProvide JSON response:\\n{\\n  \\\"score\\\": 0-100,\\n  \\\"quality\\\": \\\"Hot\\\" (70+) | \\\"Warm\\\" (40-69) | \\\"Cold\\\" (0-39),\\n  \\\"insights\\\": [\\\"3-5 specific insights\\\"],\\n  \\\"strategy\\\": \\\"Personalized outreach approach\\\",\\n  \\\"pain_points\\\": [\\\"3-4 likely challenges\\\"]\\n}\\n\\nRespond ONLY with valid JSON.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 1500\n  }\n}",
+        "parseResponse": true
+      },
+      "metadata": {
+        "name": "7. Gemini AI - Analyze Lead",
+        "restore": {}
+      }
+    },
+    {
+      "id": 8,
+      "module": "router:setVariable",
+      "version": 1,
+      "mapper": {
+        "variableName": "CleanJSON",
+        "variableValue": "{{replace(replace(7.candidates[1].content.parts[1].text; \"```json\"; \"\"); \"```\"; \"\")}}"
+      },
+      "metadata": {
+        "name": "8. Clean JSON Response",
+        "restore": {}
+      }
+    },
+    {
+      "id": 9,
+      "module": "json:parse",
+      "version": 1,
+      "mapper": {
+        "data": "{{8.CleanJSON}}"
+      },
+      "metadata": {
+        "name": "9. Parse JSON",
+        "restore": {
+          "parameters": {
+            "data": {
+              "mode": "map"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "module": "airtable:createRecord",
+      "version": 1,
+      "mapper": {
+        "base": "Enriched Leads",
+        "table": "All Leads",
+        "fields": [
+          {
+            "name": "Business Name",
+            "value": "{{3.title}}"
+          },
+          {
+            "name": "Website",
+            "value": "{{3.website}}"
+          },
+          {
+            "name": "Phone",
+            "value": "{{3.phoneNumber}}"
+          },
+          {
+            "name": "Address",
+            "value": "{{3.address}}"
+          },
+          {
+            "name": "Rating",
+            "value": "{{3.totalScore}}"
+          },
+          {
+            "name": "Review Count",
+            "value": "{{3.reviewsCount}}"
+          },
+          {
+            "name": "Employee Count",
+            "value": "{{6.EmployeeCount}}"
+          },
+          {
+            "name": "Revenue",
+            "value": "{{6.Revenue}}"
+          },
+          {
+            "name": "Industry",
+            "value": "{{6.Industry}}"
+          },
+          {
+            "name": "Contact Name",
+            "value": "{{6.ContactName}}"
+          },
+          {
+            "name": "Contact Title",
+            "value": "{{6.ContactTitle}}"
+          },
+          {
+            "name": "Contact Email",
+            "value": "{{6.ContactEmail}}"
+          },
+          {
+            "name": "AI Score",
+            "value": "{{9.score}}"
+          },
+          {
+            "name": "Lead Quality",
+            "value": "{{9.quality}}"
+          },
+          {
+            "name": "Key Insights",
+            "value": "{{join(9.insights; \"\\n- \")}}"
+          },
+          {
+            "name": "Outreach Strategy",
+            "value": "{{9.strategy}}"
+          },
+          {
+            "name": "Pain Points",
+            "value": "{{join(9.pain_points; \"\\n- \")}}"
+          }
+        ]
+      },
+      "metadata": {
+        "name": "10. Create Airtable Record",
+        "restore": {
+          "parameters": {
+            "table": {
+              "mode": "select"
+            },
+            "base": {
+              "mode": "select"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "module": "router:aggregator",
+      "version": 1,
+      "mapper": {
+        "sourceModule": 3,
+        "aggregatedFields": [
+          {
+            "name": "Business Name",
+            "value": "{{10.\"Business Name\"}}"
+          }
+        ]
+      },
+      "metadata": {
+        "name": "11. Aggregator - Wait for All Leads",
+        "restore": {}
+      }
+    },
+    {
+      "id": 12,
+      "module": "google-email:sendEmail",
+      "version": 1,
+      "mapper": {
+        "to": "your-manager-email@company.com",
+        "subject": "✅ 50 New Leads Ready for Review",
+        "content": "Hi Team,\\n\\nYour lead enrichment is complete! \\n\\n📊 Batch Summary:\\n- Total Leads Processed: {{length(11.array)}}\\n- Enriched with: Company data, contact emails, AI insights\\n\\n🔗 View in Airtable:\\n[Your Airtable Base URL]\\n\\nLeads are categorized by quality (Hot/Warm/Cold) and include:\\n✓ Decision-maker contact info\\n✓ Company intelligence  \\n✓ Personalized outreach strategies\\n✓ Identified pain points\\n\\nReady to start outreach!\\n\\n---\\nAutomated by Make.com",
+        "html": false
+      },
+      "metadata": {
+        "name": "12. Send Email to Manager",
+        "restore": {}
+      }
+    }
+  ],
+  "routes": [
+    {
+      "from": 1,
+      "to": 2
+    },
+    {
+      "from": 2,
+      "to": 3
+    },
+    {
+      "from": 3,
+      "to": 4
+    },
+    {
+      "from": 4,
+      "to": 5
+    },
+    {
+      "from": 5,
+      "to": 6
+    },
+    {
+      "from": 6,
+      "to": 7
+    },
+    {
+      "from": 7,
+      "to": 8
+    },
+    {
+      "from": 8,
+      "to": 9
+    },
+    {
+      "from": 9,
+      "to": 10
+    },
+    {
+      "from": 10,
+      "to": 11
+    },
+    {
+      "from": 11,
+      "to": 12
+    }
+  ],
+  "triggers": [
+    {
+      "id": 1,
+      "module": "apify:watchActorRuns"
+    }
+  ],
+  "connections": [],
+  "settings": {
+    "flowSettings": {
+      "name": "Lead Enrichment Pipeline"
+    },
+    "schedule": {
+      "interval": 1800,
+      "unit": "minutes",
+      "dayOfWeek": [],
+      "timeZone": "Europe/London"
+    }
+  }
+}
