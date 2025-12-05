@@ -1,0 +1,544 @@
+{
+  "name": "Lead Enrichment Pipeline",
+  "flow": [
+    {
+      "id": 1,
+      "module": "apify:watchActorRuns",
+      "version": 1,
+      "parameters": {
+        "__IMTHOOK__": 1
+      },
+      "mapper": {
+        "actorId": "compass/crawler-google-places",
+        "status": "SUCCEEDED"
+      },
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "actorId": {
+              "mode": "edit"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "apify:listDatasetItems",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "datasetId": "{{1.data.defaultDatasetId}}",
+        "limit": 50
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "datasetId": {
+              "mode": "map"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicIterator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{2.items}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "array": {
+              "mode": "map"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {},
+      "mapper": {
+        "url": "https://api.apollo.io/v1/organizations/enrich",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "YOUR_APOLLO_API_KEY"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "body": "{\n  \"domain\": \"{{replace(replace(replace(3.website; \"https://\"; \"\"); \"http://\"; \"\"); \"www.\"; \"\")}}\"\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "method": {
+              "mode": "chose",
+              "label": "POST"
+            },
+            "headers": {
+              "mode": "chose",
+              "items": [
+                null,
+                null
+              ]
+            },
+            "qs": {
+              "mode": "chose"
+            },
+            "bodyType": {
+              "label": "Raw"
+            },
+            "contentType": {
+              "label": "JSON (application/json)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {},
+      "mapper": {
+        "url": "https://api.apollo.io/v1/people/search",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "name": "X-Api-Key",
+            "value": "YOUR_APOLLO_API_KEY"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "body": "{\n  \"organization_ids\": [\"{{4.data.organization.id}}\"],\n  \"person_titles\": [\"Owner\", \"CEO\", \"President\", \"Founder\", \"Managing Director\", \"General Manager\"],\n  \"per_page\": 1,\n  \"page\": 1\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "method": {
+              "mode": "chose",
+              "label": "POST"
+            },
+            "headers": {
+              "mode": "chose",
+              "items": [
+                null,
+                null
+              ]
+            },
+            "qs": {
+              "mode": "chose"
+            },
+            "bodyType": {
+              "label": "Raw"
+            },
+            "contentType": {
+              "label": "JSON (application/json)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "module": "builtin:SetMultipleVariables",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "variables": [
+          {
+            "name": "EmployeeCount",
+            "value": "{{if(4.data.organization.estimated_num_employees; 4.data.organization.estimated_num_employees; \"Unknown\")}}"
+          },
+          {
+            "name": "Revenue",
+            "value": "{{if(4.data.organization.estimated_annual_revenue; \"$\" + 4.data.organization.estimated_annual_revenue; \"Unknown\")}}"
+          },
+          {
+            "name": "Industry",
+            "value": "{{if(4.data.organization.industry; 4.data.organization.industry; \"Unknown\")}}"
+          },
+          {
+            "name": "ContactName",
+            "value": "{{if(5.data.people[1].first_name; 5.data.people[1].first_name + \" \" + 5.data.people[1].last_name; \"Not found\")}}"
+          },
+          {
+            "name": "ContactTitle",
+            "value": "{{if(5.data.people[1].title; 5.data.people[1].title; \"Unknown\")}}"
+          },
+          {
+            "name": "ContactEmail",
+            "value": "{{if(5.data.people[1].email; 5.data.people[1].email; \"Not found\")}}"
+          }
+        ],
+        "scope": "roundtrip"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "variables": {
+              "items": [
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            },
+            "scope": {
+              "label": "One cycle"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {},
+      "mapper": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=YOUR_GEMINI_API_KEY",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "body": "{\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Analyze this B2B lead:\\n\\nBusiness: {{3.title}}\\nWebsite: {{3.website}}\\nRating: {{3.totalScore}}/5 ({{3.reviewsCount}} reviews)\\nLocation: {{3.address}}\\nEmployees: {{6.EmployeeCount}}\\nRevenue: {{6.Revenue}}\\nIndustry: {{6.Industry}}\\nContact: {{6.ContactName}} - {{6.ContactTitle}}\\nEmail: {{6.ContactEmail}}\\n\\nProvide JSON response:\\n{\\n  \\\"score\\\": 0-100,\\n  \\\"quality\\\": \\\"Hot\\\" (70+) | \\\"Warm\\\" (40-69) | \\\"Cold\\\" (0-39),\\n  \\\"insights\\\": [\\\"3-5 specific insights\\\"],\\n  \\\"strategy\\\": \\\"Personalized outreach approach\\\",\\n  \\\"pain_points\\\": [\\\"3-4 likely challenges\\\"]\\n}\\n\\nRespond ONLY with valid JSON.\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"temperature\": 0.7,\n    \"maxOutputTokens\": 1500\n  }\n}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "method": {
+              "mode": "chose",
+              "label": "POST"
+            },
+            "headers": {
+              "mode": "chose",
+              "items": [
+                null
+              ]
+            },
+            "qs": {
+              "mode": "chose"
+            },
+            "bodyType": {
+              "label": "Raw"
+            },
+            "contentType": {
+              "label": "JSON (application/json)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "module": "builtin:SetVariable",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "CleanJSON",
+        "scope": "roundtrip",
+        "value": "{{replace(replace(7.data.candidates[1].content.parts[1].text; \"```json\"; \"\"); \"```\"; \"\")}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "scope": {
+              "label": "One cycle"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "json": "{{8.CleanJSON}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "json": {
+              "mode": "edit"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "module": "airtable:createRecord",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 1
+      },
+      "mapper": {
+        "base": "YOUR_AIRTABLE_BASE_ID",
+        "table": "All Leads",
+        "record": {
+          "Business Name": "{{3.title}}",
+          "Website": "{{3.website}}",
+          "Phone": "{{3.phoneNumber}}",
+          "Address": "{{3.address}}",
+          "Rating": "{{3.totalScore}}",
+          "Review Count": "{{3.reviewsCount}}",
+          "Employee Count": "{{6.EmployeeCount}}",
+          "Revenue": "{{6.Revenue}}",
+          "Industry": "{{6.Industry}}",
+          "Contact Name": "{{6.ContactName}}",
+          "Contact Title": "{{6.ContactTitle}}",
+          "Contact Email": "{{6.ContactEmail}}",
+          "AI Score": "{{9.score}}",
+          "Lead Quality": "{{9.quality}}",
+          "Key Insights": "{{join(9.insights; \"\n- \")}}",
+          "Outreach Strategy": "{{9.strategy}}",
+          "Pain Points": "{{join(9.pain_points; \"\n- \")}}"
+        },
+        "useColumnId": false,
+        "typecast": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 2700,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "My Airtable connection",
+              "data": {
+                "scoped": "true",
+                "connection": "airtable2"
+              }
+            }
+          },
+          "expect": {
+            "base": {
+              "mode": "edit"
+            },
+            "table": {
+              "mode": "edit"
+            },
+            "useColumnId": {
+              "mode": "chose"
+            },
+            "typecast": {
+              "mode": "chose"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "__IMTCONN__",
+            "type": "account:airtable2",
+            "label": "Connection",
+            "required": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "module": "builtin:BasicAggregator",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "source": "3",
+        "aggregateFunction": "{{toString(10.id)}}",
+        "summary": ""
+      },
+      "metadata": {
+        "designer": {
+          "x": 3000,
+          "y": 0
+        },
+        "restore": {
+          "expect": {
+            "source": {
+              "label": "Iterator [3]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 12,
+      "module": "google-email:sendEmail",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": 1
+      },
+      "mapper": {
+        "to": [
+          "your-manager-email@company.com"
+        ],
+        "subject": "✅ 50 New Leads Ready for Review",
+        "html": "<p>Hi Team,</p><p>Your lead enrichment is complete!</p><p>📊 <strong>Batch Summary:</strong><br>- Total Leads Processed: {{length(11.array)}}<br>- Enriched with: Company data, contact emails, AI insights</p><p>🔗 <strong>View in Airtable:</strong><br>[Your Airtable Base URL]</p><p>Leads are categorized by quality (Hot/Warm/Cold) and include:<br>✓ Decision-maker contact info<br>✓ Company intelligence<br>✓ Personalized outreach strategies<br>✓ Identified pain points</p><p>Ready to start outreach!</p><p>---<br>Automated by Make.com</p>",
+        "attachments": []
+      },
+      "metadata": {
+        "designer": {
+          "x": 3300,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "My Google connection",
+              "data": {
+                "scoped": "true",
+                "connection": "google-restricted"
+              }
+            }
+          },
+          "expect": {
+            "to": {
+              "mode": "chose",
+              "items": [
+                null
+              ]
+            },
+            "cc": {
+              "mode": "chose"
+            },
+            "bcc": {
+              "mode": "chose"
+            },
+            "attachments": {
+              "mode": "chose"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "__IMTCONN__",
+            "type": "account:google-restricted",
+            "label": "Connection",
+            "required": true
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us1.make.com"
+  }
+}
