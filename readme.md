@@ -3,16 +3,15 @@
 **DocuFetch** is a high-performance Retrieval-Augmented Generation (RAG) system built on **n8n**. It automates the entire lifecycle of company knowledge—from the moment a document is dropped into Google Drive to the moment an employee asks a complex question in Slack.
 
 By leveraging **Google Gemini 2.5 Pro** for reasoning and **Pinecone** for vector storage, DocuFetch provides a "human-in-the-loop" feel with institutional memory.
+[Process Flow](docufetch-system-architecture.png)
 
 ## 🎥 Demo Video
 
-<!-- Insert Demo Video Here -->
 > *[Place your demo video link or embed code here]*
 
-## 📸 Workflow Screenshot
+## 📸 Workflow
 
-<!-- Insert Workflow Screenshot Here -->
-> *[Place your workflow screenshot image here]*
+> *[DocuFetch Screenshot.png]*
 
 ## 🚀 Key Features
 
