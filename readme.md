@@ -7,7 +7,7 @@ By leveraging **Google Gemini 2.5 Pro** for reasoning and **Pinecone** for vecto
 
 ## 🎥 Demo Video
 
-> *[Place your demo video link or embed code here]*
+> *[https://www.loom.com/share/8a7bea8d60314eb3ae03c08232b96ad8]*
 
 ## 📸 Workflow
 
