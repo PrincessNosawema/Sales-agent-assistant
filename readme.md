@@ -36,18 +36,18 @@ This system acts as a personal Chief of Staff. By leveraging Gemini 2.5 Flash an
 * **Productivity**: Google Workspace (Gmail & Calendar API)
 
 ---
-# 🛠️ The AI Toolbox: 9 Specialized Agent Tools
+## 🧰 The AI Toolbox: 9 Specialized Agent Tools
 
 The core of this system is its ability to autonomously select and execute the right tool for the job. Each tool is engineered with specific logic to handle real-world edge cases.
 
 ---
 
-## 📧 Email Management (Gmail)
+### 📧 Email Management (Gmail)
 
-### 1. Gmail Search & Read
+#### 1. Gmail Search & Read
 Advanced filtering for unread messages, specific senders, or date ranges. It automatically cleans HTML tags to provide the AI with readable context while preserving attachment metadata.
 
-### 2. Gmail Send New Email
+#### 2. Gmail Send New Email
 Supports full HTML body construction. It follows a strict Two-Stage Confirmation pattern: drafting a plain-text preview for the user first, then sending only upon a "Yes" confirmation.
 
 ### 3. Gmail Reply to Email
@@ -58,7 +58,7 @@ A high-stakes tool built with a critical safety guardrail that requires explicit
 
 ---
 
-## 📅 Calendar Orchestration (Google Calendar)
+### 📅 Calendar Orchestration (Google Calendar)
 
 ### 1. Calendar View Schedule
 Retrieves events with timezone-aware logic (WAT/UTC+1). Used by the agent to perform "Conflict Checks" before suggesting any new appointments.
@@ -74,10 +74,11 @@ Manages cancellations for both single and recurring events with a confirmation l
 
 ---
 
-## 👤 Identity & CRM (Google Sheets)
+### 👤 Identity & CRM (Google Sheets)
 
 ### 1. Contact Lookup
 A custom-built CRM tool using Google Sheets. It performs fuzzy matching by name, email, or phone. If the user says "Email John," the agent uses this tool to find John's address before calling the Gmail tool.
+
 ---
 
 ## 🧠 Advanced Features
