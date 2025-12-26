@@ -4,7 +4,7 @@ An autonomous, production-grade AI agent designed to manage Gmail, Google Calend
 
 ## 🎥 Demo
 
-**[Live Demo Link](#)** • **[n8n Workflow JSON](#)**
+**https://www.loom.com/share/8162358864a64bd6ba17081ecb3037ec**
 
 
 ### System Architecture
