@@ -1,75 +1,82 @@
-# 📂 DocuFetch: Enterprise RAG Agent & ETL Pipeline
+# 📱 Advanced AI Executive Assistant (n8n + Gemini + WhatsApp)
 
-**DocuFetch** is a high-performance Retrieval-Augmented Generation (RAG) system built on **n8n**. It automates the entire lifecycle of company knowledge—from the moment a document is dropped into Google Drive to the moment an employee asks a complex question in Slack.
+An autonomous, production-grade AI agent designed to manage Gmail, Google Calendar, and Contacts through a WhatsApp interface. This project goes beyond simple "chatbot" logic, implementing professional-grade features like rate-limiting, error handling, and multi-tool orchestration.
 
-By leveraging **Google Gemini 2.5 Pro** for reasoning and **Pinecone** for vector storage, DocuFetch provides a "human-in-the-loop" feel with institutional memory.
-[Process Flow](docufetch-system-architecture.png)
+## 🎥 Demo
 
-## 🎥 Demo Video
+**[Live Demo Link](#)** • **[n8n Workflow JSON](#)**
 
-> *[https://www.loom.com/share/8a7bea8d60314eb3ae03c08232b96ad8]*
 
-## 📸 Workflow
+### System Architecture
+![System Architecture Diagram](path/to/architecture-diagram.png)
 
-> *[DocuFetch Screenshot.png]*
+### Workflow Screenshot
+![n8n Workflow Screenshot](path/to/workflow-screenshot.png)
 
-## 🚀 Key Features
+---
+## 🚀 Overview
 
-*   **Automated Knowledge Ingestion (ETL):** A specialized pipeline that polls Google Drive for new files, downloads them, and processes them for the vector database.
-*   **Advanced Text Chunking:** Utilizes a Recursive Character Text Splitter with a 220-character overlap to ensure semantic context is preserved across chunks.
-*   **High-Reasoning LLM:** Powered by Google Gemini 2.5 Pro, enabling the agent to handle nuanced internal queries with a warm, professional "team-member" persona.
-*   **Conversational Memory:** Implements a Window Buffer Memory (last 3 interactions) so the bot understands follow-up questions and maintains context.
-*   **Loop Prevention Logic:** A custom "Ignore Bot" gate ensures the system doesn't trigger itself in Slack, maintaining stability and reducing API costs.
+This system acts as a personal Chief of Staff. By leveraging Gemini 2.5 Flash and the LangChain Agent framework within n8n, the assistant can interpret natural language requests to schedule meetings, draft professional emails, and look up contact information—all while maintaining a conversation history.
+
+### Key Engineering Highlights:
+* **Tool Calling & Orchestration**: Uses an Agentic framework to autonomously choose between 9+ tools (Gmail Search, Calendar Create, Contact Lookup, etc.).
+* **Safety-First Design**: Implemented a "Two-Stage Confirmation" pattern. The AI cannot send emails or delete events without a secondary "Yes" from the user.
+* **Timezone Intelligence**: Native support for Africa/Lagos (WAT) with automatic UTC conversion to ensure calendar accuracy.
+* **Production Guardrails**: Includes a custom JavaScript-based Rate Limiter and a global Analytics Logger.
+
+---
 
 ## 🛠️ Tech Stack
 
-| Component | Technology |
-| :--- | :--- |
-| **Orchestration** | n8n |
-| **LLM (Reasoning)** | Google Gemini 2.5 Pro |
-| **Vector Database** | Pinecone |
-| **Embeddings** | Google Gemini Embedding-001 |
-| **Data Sources** | Google Drive API |
-| **Communication** | Slack API |
+* **Logic Engine**: n8n (Self-hosted/Cloud)
+* **Brain**: Google Gemini 2.5 Flash (via LangChain nodes)
+* **Memory**: Window Buffer Memory (Session-aware)
+* **Database/CRM**: Google Sheets (Contact Lookup)
+* **Communications**: Meta WhatsApp Business API
+* **Productivity**: Google Workspace (Gmail & Calendar API)
 
-## 🏗️ Workflow Architecture
+---
 
-The system is divided into two primary loops:
+## 🧠 Advanced Features
 
-### 1. The Ingestion Loop (ETL)
-Every minute, the agent "watches" a specific Google Drive folder.
-*   **Trigger:** New file detected in "Office Docs".
-*   **Transform:** Text is extracted and split into optimized segments.
-*   **Embed:** Gemini generates high-dimensional vectors for the text.
-*   **Upsert:** Data is stored in the `documentknowledge` Pinecone index.
+### 1. Smart Email Management
+The agent doesn't just "send" text. It:
+* Follows professional communication templates (Casual-Professional, Warm Follow-up, etc.).
+* Uses HTML formatting for the final sent email while showing the user a Plain Text preview for readability on mobile.
+* Handles threaded replies by retrieving messageId contexts.
 
-### 2. The Retrieval Loop (Query)
-When a user sends a message in the `#random` (or designated) Slack channel:
-*   **Filtering:** The "Ignore Bot" node validates the user to prevent loops.
-*   **Reasoning:** The Gemini 2.5 Pro Agent analyzes the intent.
-*   **Retrieval:** The agent calls the `vector_store_retriever` tool to pull relevant facts from Pinecone.
-*   **Response:** A conversational, brand-aligned answer is sent back to Slack.
+### 2. Calendar Conflict Resolution
+Before booking any event, the agent is programmed to:
+* Check the user's schedule for the requested time.
+* If a conflict exists, it proactively suggests 2-3 alternative slots rather than failing the request.
 
-## 🧠 Prompt Engineering
+### 3. Resilience & Security
+* **Rate Limiting**: A custom Code Node prevents API abuse by limiting user requests per minute.
+* **Interactive Parsing**: Handles both standard text messages and WhatsApp Interactive Buttons.
+* **Error Handling**: A dedicated error branch ensures the user receives a helpful message if an API call fails, rather than the workflow simply "hanging."
 
-The agent is configured with a sophisticated system prompt that enforces:
-*   **Internal Awareness:** The bot speaks as a Princess Osas Limited employee (e.g., "We have..." instead of "The company has...").
-*   **Source Attribution:** Naturally citing documents (e.g., "According to the Employee Handbook...").
-*   **Strict Guardrails:** Prevention of hallucinations by strictly limiting answers to the provided knowledge base.
+---
 
-## 📥 Installation & Setup
+## 📋 Workflow Architecture
 
-1.  **Import to n8n:** Download the `DocuFetch_Company_RAG_Agent.json` and import it into your n8n instance.
-2.  **Credentials:** Configure the following credentials:
-    *   Google Drive OAuth2
-    *   Google Gemini (PaLM) API
-    *   Pinecone API
-    *   Slack API
-3.  **Environment Variables:** Update the `folderToWatch` ID and `pineconeIndex` name to match your environment.
-4.  **Activate:** Toggle the workflow to 'Active'.
+* **Webhook**: Receives incoming WhatsApp data.
+* **Parser**: JavaScript node extracts user intent, phone number, and media type.
+* **Rate Limiter**: Validates request frequency.
+* **AI Agent**: The core logic hub that processes the request using Gemini.
+* **Tool Belt**:
+  * Gmail Search: "Find unread emails from my boss."
+  * Calendar View: "What does my Tuesday look like?"
+  * Contact Lookup: "What is John's email?"
+* **Response Formatter**: Converts Markdown/LLM output into WhatsApp-friendly formatting (e.g., converting `**bold**` to `*bold*`).
 
-## 📈 Impact
+---
 
-*   **Zero-Touch Maintenance:** Documentation updates in real-time without manual database entries.
-*   **Reduced Slack Noise:** Employees get instant answers to policy questions without tagging HR/Management.
-*   **Scalable Knowledge:** Handles up to thousands of document chunks with sub-second retrieval times.
+## ⚙️ Setup Instructions
+
+* **n8n Setup**: Import the provided `.json` file into your n8n instance.
+* **API Credentials**:
+  * Configure the Google Console for Gmail, Calendar, and Sheets.
+  * Set up a Meta Developer App for the WhatsApp Business API.
+  * Get an API Key from Google AI Studio (Gemini).
+* **Database**: Prepare a Google Sheet with headers `Name`, `Email`, `Phone` for the Contact Lookup tool.
+* **Environment Variables**: Update the Timezone and Profile Name in the "Advanced AI Agent" system prompt.
