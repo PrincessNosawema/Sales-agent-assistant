@@ -7,7 +7,7 @@ This project is an enterprise-grade lead processing pipeline designed to automat
 
 ## 🎬 Demo
 
-[Add your demo video/GIF here]
+**https://www.loom.com/share/35b1c0dc6e04494b8686fc6569026db5**
 
 ## 🏗️ System Architecture
 
@@ -15,7 +15,7 @@ This project is an enterprise-grade lead processing pipeline designed to automat
 
 ## 📸 Workflow Screenshot
 
-![Workflow Screenshot](./assets/workflow-screenshot.png)
+![Workflow Screenshot](workflow_screenshot.png)
 
 ## 🛠️ Technical Architecture
 
