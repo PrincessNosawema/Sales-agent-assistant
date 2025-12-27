@@ -8,10 +8,10 @@ An autonomous, production-grade AI agent designed to manage Gmail, Google Calend
 ![Demo](Demo_&_Screenshots/Advanced_AI_WhatsApp_Assistant_Demo.MOV)
 
 ### System Architecture
-![System Architecture Diagram](path/to/architecture-diagram.png)
+![System Architecture Diagram](system_architecture.PNG)
 
 ### Workflow Screenshot
-![n8n Workflow Screenshot](path/to/workflow-screenshot.png)
+![n8n Workflow Screenshot](Demo_&_Screenshots/Advanced_AI_WhatsApp_Assistant_workflow.png)
 
 ---
 ## 🚀 Overview
@@ -112,6 +112,7 @@ Before booking any event, the agent is programmed to:
   * Calendar View: "What does my Tuesday look like?"
   * Contact Lookup: "What is John's email?"
 * **Response Formatter**: Converts Markdown/LLM output into WhatsApp-friendly formatting (e.g., converting `**bold**` to `*bold*`).
+![Messages Screenshots](Demo_&_Screenshots/Messages_Screenshots.JPG)
 
 ---
 
