@@ -112,6 +112,7 @@ Before booking any event, the agent is programmed to:
   * Calendar View: "What does my Tuesday look like?"
   * Contact Lookup: "What is John's email?"
 * **Response Formatter**: Converts Markdown/LLM output into WhatsApp-friendly formatting (e.g., converting `**bold**` to `*bold*`).
+
 ![Messages Screenshots](Demo_&_Screenshots/Messages_Screenshots.JPG)
 
 ---
