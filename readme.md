@@ -5,7 +5,7 @@ An autonomous, production-grade AI agent designed to manage Gmail, Google Calend
 ## 🎥 Demo
 
 **https://www.loom.com/share/8162358864a64bd6ba17081ecb3037ec**
-
+![Demo](Demo_&_Screenshots/Advanced_AI_WhatsApp_Assistant_Demo.MOV)
 
 ### System Architecture
 ![System Architecture Diagram](path/to/architecture-diagram.png)
