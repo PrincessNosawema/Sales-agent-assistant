@@ -1,128 +1,66 @@
-# 📱 Advanced AI Executive Assistant (n8n + Gemini + WhatsApp)
+# Lead Analysis & Priority Alert System (n8n + Groq + HubSpot)
 
-An autonomous, production-grade AI agent designed to manage Gmail, Google Calendar, and Contacts through a WhatsApp interface. This project goes beyond simple "chatbot" logic, implementing professional-grade features like rate-limiting, error handling, and multi-tool orchestration.
+## 📌 Project Overview
+This project is an enterprise-grade lead processing pipeline designed to automate the transition from "Raw Data" to "Actionable Sales Intelligence." It ingests leads from external sources, performs advanced data sanitization via JavaScript, utilizes LLMs (Llama 3.3 via Groq) for sentiment and intent analysis, and orchestrates a multi-channel synchronization strategy involving HubSpot CRM and Slack.
 
-## 🎥 Demo
+**The Goal:** Eliminate manual lead triaging by providing sales teams with a weighted "Composite Score" and instant priority alerts.
 
-**https://www.loom.com/share/8162358864a64bd6ba17081ecb3037ec**
-![Demo](Demo_&_Screenshots/Advanced_AI_WhatsApp_Assistant_Demo.MOV)
+## 🎬 Demo
 
-### System Architecture
-![System Architecture Diagram](system_architecture.PNG)
+[Add your demo video/GIF here]
 
-### Workflow Screenshot
-![n8n Workflow Screenshot](Demo_&_Screenshots/Advanced_AI_WhatsApp_Assistant_workflow.png)
+## 🏗️ System Architecture
 
----
-## 🚀 Overview
+![System Architecture Diagram](./assets/architecture.png)
 
-This system acts as a personal Chief of Staff. By leveraging Gemini 2.5 Flash and the LangChain Agent framework within n8n, the assistant can interpret natural language requests to schedule meetings, draft professional emails, and look up contact information—all while maintaining a conversation history.
+## 📸 Workflow Screenshot
 
-### Key Engineering Highlights:
-* **Tool Calling & Orchestration**: Uses an Agentic framework to autonomously choose between 9+ tools (Gmail Search, Calendar Create, Contact Lookup, etc.).
-* **Safety-First Design**: Implemented a "Two-Stage Confirmation" pattern. The AI cannot send emails or delete events without a secondary "Yes" from the user.
-* **Timezone Intelligence**: Native support for Africa/Lagos (WAT) with automatic UTC conversion to ensure calendar accuracy.
-* **Production Guardrails**: Includes a custom JavaScript-based Rate Limiter and a global Analytics Logger.
+![Workflow Screenshot](./assets/workflow-screenshot.png)
 
----
+## 🛠️ Technical Architecture
 
-## 🛠️ Tech Stack
+### 1. Data Ingestion & Sanitization (The "Safe-Guard" Layer)
+ * **Source:** Google Sheets API.
+ * **Logic:** A custom JavaScript Normalization Node validates email formats against a comprehensive TLD list and cleans phone records.
+ * **Resiliency:** It auto-generates placeholder emails using a unique identifier logic to ensure HubSpot API compatibility even when source data is "dirty."
 
-* **Logic Engine**: n8n (Self-hosted/Cloud)
-* **Brain**: Google Gemini 2.5 Flash (via LangChain nodes)
-* **Memory**: Window Buffer Memory (Session-aware)
-* **Database/CRM**: Google Sheets (Contact Lookup)
-* **Communications**: Meta WhatsApp Business API
-* **Productivity**: Google Workspace (Gmail & Calendar API)
+### 2. AI Intelligence (The "Analyst" Layer)
+ * **Model:** Groq (Llama-3.3-70b-versatile).
+ * **Process:** The workflow passes the call transcript, industry, and company size to the LLM.
+ * **Output:** Extracts structured JSON containing buying_intent_score, urgency_level, pain_points, and next_best_action.
 
----
-## 🧰 The AI Toolbox: 9 Specialized Agent Tools
+### 3. Composite Scoring Algorithm
+I implemented a weighted scoring logic to ensure the AI's opinion is balanced with hard data:
 
-The core of this system is its ability to autonomously select and execute the right tool for the job. Each tool is engineered with specific logic to handle real-world edge cases.
+ * **ICP Fit:** Calculated via JS based on industry (SaaS/Finance/Tech) and company size.
 
----
+### 4. CRM Orchestration & Alerting
+ * **Dynamic Routing:** Leads are branched into High, Medium, and Low intent streams.
+ * **HubSpot Upsert:** Syncs leads with enriched custom properties (ai_lead_score, intent_tag, analysis_notes).
+ * **Instant Slack Alerts:** High and Medium priority leads trigger formatted Slack notifications with specific "Next Steps" for the sales team.
+ * **Batch Management:** The system uses a Split-in-Batches (Size: 5) approach to respect Groq and HubSpot rate limits.
 
-### 📧 Email Management (Gmail)
+## 🚀 Key Features & Highlights
+ * **Fail-Safe Logic:** Includes error handling that assigns default scores and "Manual Review" tags if the AI analysis fails.
+ * **State Restoration:** Uses "Restore Data" nodes to ensure lead context is preserved after Slack/CRM interactions for the final reporting phase.
+ * **Automated Reporting:** Generates a final JSON summary report of the entire batch execution (Average score, success vs. failure rates).
 
-#### 1. Gmail Search & Read
-Advanced filtering for unread messages, specific senders, or date ranges. It automatically cleans HTML tags to provide the AI with readable context while preserving attachment metadata.
-
-#### 2. Gmail Send New Email
-Supports full HTML body construction. It follows a strict Two-Stage Confirmation pattern: drafting a plain-text preview for the user first, then sending only upon a "Yes" confirmation.
-
-#### 3. Gmail Reply to Email
-Context-aware replying using messageId tracking to maintain thread integrity within the user's inbox.
-
-#### 4. Gmail Delete Email (Permanent)
-A high-stakes tool built with a critical safety guardrail that requires explicit user confirmation to prevent accidental data loss.
-
----
-
-### 📅 Calendar Orchestration (Google Calendar)
-
-#### 1. Calendar View Schedule
-Retrieves events with timezone-aware logic (WAT/UTC+1). Used by the agent to perform "Conflict Checks" before suggesting any new appointments.
-
-#### 2. Calendar Create Event
-Handles complex scheduling including attendees, locations, and descriptions. It automatically converts natural language (e.g., "Next Tuesday at 2pm") into ISO 8601 timestamps.
-
-#### 3. Calendar Update Event
-Modifies existing meetings (changing times, adding attendees) and triggers automatic Google Calendar notifications to all participants.
-
-#### 4. Calendar Delete Event
-Manages cancellations for both single and recurring events with a confirmation loop.
-
----
-
-### 👤 Identity & CRM (Google Sheets)
-
-#### 1. Contact Lookup
-A custom-built CRM tool using Google Sheets. It performs fuzzy matching by name, email, or phone. If the user says "Email John," the agent uses this tool to find John's address before calling the Gmail tool.
-
----
-
-## 🧠 Advanced Features
-
-### 1. Smart Email Management
-The agent doesn't just "send" text. It:
-* Follows professional communication templates (Casual-Professional, Warm Follow-up, etc.).
-* Uses HTML formatting for the final sent email while showing the user a Plain Text preview for readability on mobile.
-* Handles threaded replies by retrieving messageId contexts.
-
-### 2. Calendar Conflict Resolution
-Before booking any event, the agent is programmed to:
-* Check the user's schedule for the requested time.
-* If a conflict exists, it proactively suggests 2-3 alternative slots rather than failing the request.
-
-### 3. Resilience & Security
-* **Rate Limiting**: A custom Code Node prevents API abuse by limiting user requests per minute.
-* **Interactive Parsing**: Handles both standard text messages and WhatsApp Interactive Buttons.
-* **Error Handling**: A dedicated error branch ensures the user receives a helpful message if an API call fails, rather than the workflow simply "hanging."
-
----
-
-## 📋 Workflow Architecture
-
-* **Webhook**: Receives incoming WhatsApp data.
-* **Parser**: JavaScript node extracts user intent, phone number, and media type.
-* **Rate Limiter**: Validates request frequency.
-* **AI Agent**: The core logic hub that processes the request using Gemini.
-* **Tool Belt**:
-  * Gmail Search: "Find unread emails from my boss."
-  * Calendar View: "What does my Tuesday look like?"
-  * Contact Lookup: "What is John's email?"
-* **Response Formatter**: Converts Markdown/LLM output into WhatsApp-friendly formatting (e.g., converting `**bold**` to `*bold*`).
-
-![Messages Screenshots](Demo_&_Screenshots/Messages_Screenshots.JPG)
-
----
+## 💻 Tech Stack
+ * **Automation:** n8n
+ * **AI/LLM:** Groq (Llama-3.3-70b)
+ * **Languages:** JavaScript (Node.js)
+ * **Tools:** HubSpot API, Slack API, Google Sheets API
 
 ## ⚙️ Setup Instructions
+ * **Import Workflow:** Download the Lead_Analysis_System.json and import it into your n8n instance.
+ * **Credentials:**
+   * Set up Google Sheets OAuth2.
+   * Set up Groq API (obtain key from groq.com).
+   * Set up HubSpot OAuth2.
+   * Set up Slack OAuth2.
+ * **Environment Variables:** Ensure your HubSpot account has the following custom properties: ai_lead_score, intent_tag, analysis_notes, and email_status.
 
-* **n8n Setup**: Import the provided `.json` file into your n8n instance.
-* **API Credentials**:
-  * Configure the Google Console for Gmail, Calendar, and Sheets.
-  * Set up a Meta Developer App for the WhatsApp Business API.
-  * Get an API Key from Google AI Studio (Gemini).
-* **Database**: Prepare a Google Sheet with headers `Name`, `Email`, `Phone` for the Contact Lookup tool.
-* **Environment Variables**: Update the Timezone and Profile Name in the "Advanced AI Agent" system prompt.
+## 📈 Business Impact
+ * **Reduced Triage Time:** Automates the 5–10 minutes a human takes to read a transcript and score a lead.
+ * **Higher Accuracy:** Eliminates subjective bias in lead scoring through a standardized weighted algorithm.
+ * **Speed to Lead:** High-intent prospects are flagged in Slack within seconds of ingestion.
