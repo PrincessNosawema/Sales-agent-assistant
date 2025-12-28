@@ -1,66 +1,46 @@
-# Lead Analysis & Priority Alert System (n8n + Groq + HubSpot)
+# 🚀 Autonomous B2B Lead Qualification & Enrichment Pipeline
 
-## 📌 Project Overview
-This project is an enterprise-grade lead processing pipeline designed to automate the transition from "Raw Data" to "Actionable Sales Intelligence." It ingests leads from external sources, performs advanced data sanitization via JavaScript, utilizes LLMs (Llama 3.3 via Groq) for sentiment and intent analysis, and orchestrates a multi-channel synchronization strategy involving HubSpot CRM and Slack.
+An autonomous B2B prospecting engine that scrapes localized business data, uses Generative AI to perform multi-factor lead scoring, and synchronizes enriched data to Airtable for high-ticket sales outreach.
+[Add system architecture screenshot here]()
 
-**The Goal:** Eliminate manual lead triaging by providing sales teams with a weighted "Composite Score" and instant priority alerts.
+## 📌 Overview
+Manual lead prospecting is a bottleneck for high-ticket service providers. This project automates the entire "Top of Funnel" (ToFu) process. It moves beyond simple scraping by using an LLM to "read" business health—categorizing leads into Hot, Warm, or Cold based on professional markers (ratings, domain authority, and digital footprint).
 
-## 🎬 Demo
+## Video Demo
+[Add video demo here]
 
-**https://www.loom.com/share/35b1c0dc6e04494b8686fc6569026db5**
+## Workflow Screenshot
+[Add workflow screenshot here]()
 
-## 🏗️ System Architecture
+## 🛠 Tech Stack
+ * Orchestration: Make.com (Advanced Aggregator/Iterator patterns)
+ * Data Extraction: Apify (Google Maps Scraper)
+ * Intelligence: Google Gemini 2.0 Flash (Structured JSON Output)
+ * Database/CRM: Airtable
+ * Communications: Gmail API
 
-![System Architecture Diagram](./assets/architecture.png)
+## 🏗 Workflow Architecture
+The pipeline is designed for efficiency and cost-optimization:
+ * Trigger: An Apify Actor finishes a Google Maps scrape; a Webhook sends the dataset to the pipeline.
+ * Data Processing: * Aggregation: Collects raw dataset items into a consolidated array.
+   * Iteration: Loops through each business to process them individually.
+ * AI Analysis (The Brain):
+   * Uses a custom-engineered prompt to act as an "Automation Consultant."
+   * Scoring Logic:
+     * HOT: Rating ≥ 4.0, 10+ reviews, professional domain email, active website.
+     * WARM/COLD: Based on missing digital infrastructure or low social proof.
+   * Strategic Output: Generates a custom outreach strategy and identifies specific business pain points.
+ * Storage: Maps 11+ data points (Email, Phone, Industry, Rating, AI Insights) into Airtable.
+ * Closing Loop: Once the batch is processed, a summary email is sent to the user with a direct link to the new Airtable records.
 
-## 📸 Workflow Screenshot
+## 🧠 Key Automation Engineering Features
+ * Structured JSON Output: The Gemini module is configured with a strict JSON response schema to ensure zero-fail parsing into Airtable.
+ * Regex Sanitization: Implemented replace() functions to clean LLM markdown artifacts (e.g., stripping ```json tags) before parsing.
+ * Batch Efficiency: Uses an Aggregator-to-Iterator pattern to handle bulk data without hitting API rate limits or creating redundant operations.
+ * Dynamic Lead Triage: Instead of just "gathering" leads, the system "qualifies" them, saving sales teams hours of manual vetting.
 
-![Workflow Screenshot](workflow_screenshot.png)
-
-## 🛠️ Technical Architecture
-
-### 1. Data Ingestion & Sanitization (The "Safe-Guard" Layer)
- * **Source:** Google Sheets API.
- * **Logic:** A custom JavaScript Normalization Node validates email formats against a comprehensive TLD list and cleans phone records.
- * **Resiliency:** It auto-generates placeholder emails using a unique identifier logic to ensure HubSpot API compatibility even when source data is "dirty."
-
-### 2. AI Intelligence (The "Analyst" Layer)
- * **Model:** Groq (Llama-3.3-70b-versatile).
- * **Process:** The workflow passes the call transcript, industry, and company size to the LLM.
- * **Output:** Extracts structured JSON containing buying_intent_score, urgency_level, pain_points, and next_best_action.
-
-### 3. Composite Scoring Algorithm
-I implemented a weighted scoring logic to ensure the AI's opinion is balanced with hard data:
-
- * **ICP Fit:** Calculated via JS based on industry (SaaS/Finance/Tech) and company size.
-
-### 4. CRM Orchestration & Alerting
- * **Dynamic Routing:** Leads are branched into High, Medium, and Low intent streams.
- * **HubSpot Upsert:** Syncs leads with enriched custom properties (ai_lead_score, intent_tag, analysis_notes).
- * **Instant Slack Alerts:** High and Medium priority leads trigger formatted Slack notifications with specific "Next Steps" for the sales team.
- * **Batch Management:** The system uses a Split-in-Batches (Size: 5) approach to respect Groq and HubSpot rate limits.
-
-## 🚀 Key Features & Highlights
- * **Fail-Safe Logic:** Includes error handling that assigns default scores and "Manual Review" tags if the AI analysis fails.
- * **State Restoration:** Uses "Restore Data" nodes to ensure lead context is preserved after Slack/CRM interactions for the final reporting phase.
- * **Automated Reporting:** Generates a final JSON summary report of the entire batch execution (Average score, success vs. failure rates).
-
-## 💻 Tech Stack
- * **Automation:** n8n
- * **AI/LLM:** Groq (Llama-3.3-70b)
- * **Languages:** JavaScript (Node.js)
- * **Tools:** HubSpot API, Slack API, Google Sheets API
-
-## ⚙️ Setup Instructions
- * **Import Workflow:** Download the Lead_Analysis_System.json and import it into your n8n instance.
- * **Credentials:**
-   * Set up Google Sheets OAuth2.
-   * Set up Groq API (obtain key from groq.com).
-   * Set up HubSpot OAuth2.
-   * Set up Slack OAuth2.
- * **Environment Variables:** Ensure your HubSpot account has the following custom properties: ai_lead_score, intent_tag, analysis_notes, and email_status.
-
-## 📈 Business Impact
- * **Reduced Triage Time:** Automates the 5–10 minutes a human takes to read a transcript and score a lead.
- * **Higher Accuracy:** Eliminates subjective bias in lead scoring through a standardized weighted algorithm.
- * **Speed to Lead:** High-intent prospects are flagged in Slack within seconds of ingestion.
+## 🚀 How to Use
+ * Import Blueprint: Download the .json file from this repo and import it into your Make.com dashboard.
+ * Configure Connections: Connect your Apify API Token, Google AI (Gemini) API Key, and Airtable Base.
+ * Airtable Schema: Ensure your Airtable table has fields matching the mapping in Module 11 (Business Name, Industry, Lead Quality, etc.).
+ * Run: Trigger an Apify run and watch the leads populate in real-time.
