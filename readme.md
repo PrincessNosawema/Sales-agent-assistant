@@ -1,16 +1,16 @@
 # 🚀 Autonomous B2B Lead Qualification & Enrichment Pipeline
 
 An autonomous B2B prospecting engine that scrapes localized business data, uses Generative AI to perform multi-factor lead scoring, and synchronizes enriched data to Airtable for high-ticket sales outreach.
-[Add system architecture screenshot here]()
+![architecture](Lead_enrichment_architecture.PNG)
 
 ## 📌 Overview
 Manual lead prospecting is a bottleneck for high-ticket service providers. This project automates the entire "Top of Funnel" (ToFu) process. It moves beyond simple scraping by using an LLM to "read" business health—categorizing leads into Hot, Warm, or Cold based on professional markers (ratings, domain authority, and digital footprint).
 
 ## Video Demo
-[Add video demo here]
+**https://www.loom.com/share/934eea1fbeba4f1f81709532f03c1f55**
 
 ## Workflow Screenshot
-[Add workflow screenshot here]()
+![Screenshot](Enrichment_workflow_screenshot.png)
 
 ## 🛠 Tech Stack
  * Orchestration: Make.com (Advanced Aggregator/Iterator patterns)
